@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { CountryCarbonIntensity } from "@/types";
 
 const PAGE = 50;
@@ -29,17 +29,35 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
     </div>
   );
 }
-export default function CarbonIntensityLeaderboard({ data }: { data: CountryCarbonIntensity[] }) {
+export default function CarbonIntensityLeaderboard({ data, search = "" }: { data: CountryCarbonIntensity[]; search?: string }) {
   const [page, setPage] = useState(1);
   const [asc,  setAsc]  = useState(true);
-  const sorted = [...data].sort((a, b) => asc ? a.gCO2perKwh - b.gCO2perKwh : b.gCO2perKwh - a.gCO2perKwh);
-  const totalPages = Math.ceil(sorted.length / PAGE);
-  const visible    = sorted.slice((page - 1) * PAGE, page * PAGE);
+  // Full sorted list — determines global ranks
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sorted = useMemo(() => [...data].sort((a, b) => asc ? a.gCO2perKwh - b.gCO2perKwh : b.gCO2perKwh - a.gCO2perKwh), [data, asc]);
+
+  // code → 1-based global rank in the full sorted list
+  const rankOf = useMemo(() => {
+    const m = new Map<string, number>();
+    sorted.forEach((c, i) => m.set(c.code, i + 1));
+    return m;
+  }, [sorted]);
+
+  // Subset for display — preserves sort order
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sorted;
+    const q = search.toLowerCase();
+    return sorted.filter(c => c.country.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
+  }, [sorted, search]);
+
+  useEffect(() => { setPage(1); }, [search]);
+  const totalPages = Math.ceil(filtered.length / PAGE);
+  const visible    = filtered.slice((page - 1) * PAGE, page * PAGE);
   const avg  = data.length ? Math.round(data.reduce((s, c) => s + c.gCO2perKwh, 0) / data.length) : 0;
   const best = sorted[0];
   const liveCount = data.filter(c => c.source === "live").length;
 
-  if (!data.length) return <p className="text-center py-16 text-sm" style={{ color: "var(--text-muted)" }}>No data</p>;
+  if (!filtered.length) return <p className="text-center py-16 text-sm" style={{ color: "var(--text-muted)" }}>No data</p>;
   return (
     <>
       <div className="grid grid-cols-3 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -61,7 +79,7 @@ export default function CarbonIntensityLeaderboard({ data }: { data: CountryCarb
         <div className="text-right">Source</div>
       </div>
       {visible.map((c, i) => {
-        const rank = (page - 1) * PAGE + i + 1;
+        const rank = rankOf.get(c.code) ?? i + 1;
         const col  = getColor(c.gCO2perKwh);
         return (
           <div key={c.code} className="data-row grid items-center px-4 py-3" style={{ gridTemplateColumns: "36px 1fr 160px 80px", gap: "8px" }}>
@@ -92,7 +110,7 @@ export default function CarbonIntensityLeaderboard({ data }: { data: CountryCarb
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-5 py-3 border-t text-sm" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30" style={{ border: "1px solid rgba(34,211,238,0.2)", color: "var(--glow-cyan)", background: "rgba(34,211,238,0.06)" }}>← Prev</button>
-          <span style={{ color: "var(--text-muted)" }}>{page} / {totalPages} · {sorted.length} nations</span>
+          <span style={{ color: "var(--text-muted)" }}>{page} / {totalPages} · {filtered.length === data.length ? data.length : `${filtered.length} of ${data.length}`} nations</span>
           <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30" style={{ border: "1px solid rgba(34,211,238,0.2)", color: "var(--glow-cyan)", background: "rgba(34,211,238,0.06)" }}>Next →</button>
         </div>
       )}

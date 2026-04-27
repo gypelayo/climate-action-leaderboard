@@ -50,7 +50,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [tab,        setTab]        = useState<TabId>("renewable");
-  const [tabSearch,  setTabSearch]  = useState("");
+  const [search, setSearch] = useState("");
 
   // Global country search
   const [globalQ,       setGlobalQ]       = useState("");
@@ -110,7 +110,7 @@ export default function Dashboard() {
     return allCountries.filter(c => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)).slice(0, 8);
   }, [globalQ, allCountries]);
 
-  const handleTab = (t: TabId) => { setTab(t); setTabSearch(""); };
+  const handleTab = (t: TabId) => setTab(t);
 
   const liveRenew   = data.renewable.filter(c => c.source === "live").length;
   const recentRenew = data.renewable.filter(c => c.source === "recent").length;
@@ -120,13 +120,7 @@ export default function Dashboard() {
     ? new Date(data.lastFetched).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  function filterArr<T extends { country: string; code: string }>(arr: T[]): T[] {
-    if (!tabSearch.trim()) return arr;
-    const q = tabSearch.toLowerCase();
-    return arr.filter(c => c.country.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
-  }
-
-  const activeTab = TABS.find(t => t.id === tab)!;
+const activeTab = TABS.find(t => t.id === tab)!;
 
   return (
     <div className="relative min-h-screen" style={{ zIndex: 3 }}>
@@ -238,9 +232,9 @@ export default function Dashboard() {
                 </div>
                 <input
                   type="text"
-                  placeholder="Filter this list…"
-                  value={tabSearch}
-                  onChange={e => setTabSearch(e.target.value)}
+                  placeholder="Search all boards…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
                   className="px-3 py-1.5 text-sm rounded-lg outline-none transition-all w-44"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--text-primary)" }}
                   onFocus={e  => (e.target.style.borderColor = "rgba(34,211,238,0.4)")}
@@ -250,13 +244,13 @@ export default function Dashboard() {
 
               {/* Panel */}
               <div className="glass glass-accent relative animate-fade-in">
-                {tab === "renewable"       && <RenewableLeaderboard       data={filterArr(data.renewable)} />}
-                {tab === "carbon"          && <CarbonLeaderboard          data={filterArr(data.carbon)} />}
-                {tab === "cycling"         && <CyclingLeaderboard         data={filterArr(data.cycling)} />}
-                {tab === "forest"          && <ForestLeaderboard          data={filterArr(data.forest)} />}
-                {tab === "carbonIntensity" && <CarbonIntensityLeaderboard data={filterArr(data.carbonIntensity)} />}
-                {tab === "airQuality"      && <AirQualityLeaderboard      data={filterArr(data.airQuality)} />}
-                {tab === "wildfire"        && <WildfireLeaderboard        data={filterArr(data.wildfire)} />}
+                {tab === "renewable"       && <RenewableLeaderboard       data={data.renewable}       search={search} />}
+                {tab === "carbon"          && <CarbonLeaderboard          data={data.carbon}          search={search} />}
+                {tab === "cycling"         && <CyclingLeaderboard         data={data.cycling}         search={search} />}
+                {tab === "forest"          && <ForestLeaderboard          data={data.forest}          search={search} />}
+                {tab === "carbonIntensity" && <CarbonIntensityLeaderboard data={data.carbonIntensity} search={search} />}
+                {tab === "airQuality"      && <AirQualityLeaderboard      data={data.airQuality}      search={search} />}
+                {tab === "wildfire"        && <WildfireLeaderboard        data={data.wildfire}        search={search} />}
               </div>
             </>
           )}

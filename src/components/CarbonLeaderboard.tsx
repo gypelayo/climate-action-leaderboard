@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { CountryCarbon } from "@/types";
 
 const PAGE    = 50;
@@ -53,13 +53,16 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
   );
 }
 
-export default function CarbonLeaderboard({ data }: { data: CountryCarbon[] }) {
+export default function CarbonLeaderboard({ data, search = "" }: { data: CountryCarbon[]; search?: string }) {
   const [page,  setPage]  = useState(1);
   const [asc,   setAsc]   = useState(true);
 
   const sorted     = [...data].sort((a, b) => asc ? a.co2PerCapita - b.co2PerCapita : b.co2PerCapita - a.co2PerCapita);
-  const totalPages = Math.ceil(sorted.length / PAGE);
-  const visible    = sorted.slice((page - 1) * PAGE, page * PAGE);
+  const rankOf = useMemo(() => { const m = new Map<string,number>(); sorted.forEach((c,i)=>m.set(c.code,i+1)); return m; }, [sorted]);
+  const filtered = useMemo(() => { if (!search.trim()) return sorted; const q=search.toLowerCase(); return sorted.filter(c=>c.country.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)); }, [sorted,search]);
+  useEffect(()=>{setPage(1);},[search]);
+  const totalPages = Math.ceil(filtered.length / PAGE);
+  const visible    = filtered.slice((page - 1) * PAGE, page * PAGE);
 
   const avg     = data.length ? data.reduce((s, c) => s + c.co2PerCapita, 0) / data.length : 0;
   const best    = [...data].sort((a, b) => a.co2PerCapita - b.co2PerCapita)[0];
@@ -122,7 +125,7 @@ export default function CarbonLeaderboard({ data }: { data: CountryCarbon[] }) {
 
       {/* Rows */}
       {visible.map((c, i) => {
-        const rank    = (page - 1) * PAGE + i + 1;
+        const rank    = rankOf.get(c.code) ?? i + 1;
         const col     = getColor(c.co2PerCapita);
         const onParis = c.co2PerCapita <= PARIS;
 
@@ -191,7 +194,7 @@ export default function CarbonLeaderboard({ data }: { data: CountryCarbon[] }) {
             ← Prev
           </button>
           <span style={{ color: "var(--text-muted)" }}>
-            {page} / {totalPages} · {sorted.length} nations
+            {page} / {totalPages} · {filtered.length === data.length ? data.length : `${filtered.length} of ${data.length}`} nations
           </span>
           <button
             disabled={page === totalPages}

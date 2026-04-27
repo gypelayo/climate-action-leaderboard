@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { CountryCycling } from "@/types";
 
 const PAGE    = 50;
@@ -41,13 +41,16 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
   );
 }
 
-export default function CyclingLeaderboard({ data }: { data: CountryCycling[] }) {
+export default function CyclingLeaderboard({ data, search = "" }: { data: CountryCycling[]; search?: string }) {
   const [page, setPage] = useState(1);
   const [asc,  setAsc]  = useState(false);
 
   const sorted     = [...data].sort((a, b) => asc ? a.modalShare - b.modalShare : b.modalShare - a.modalShare);
-  const totalPages = Math.ceil(sorted.length / PAGE);
-  const visible    = sorted.slice((page - 1) * PAGE, page * PAGE);
+  const rankOf = useMemo(() => { const m = new Map<string,number>(); sorted.forEach((c,i)=>m.set(c.code,i+1)); return m; }, [sorted]);
+  const filtered = useMemo(() => { if (!search.trim()) return sorted; const q=search.toLowerCase(); return sorted.filter(c=>c.country.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)); }, [sorted,search]);
+  useEffect(()=>{setPage(1);},[search]);
+  const totalPages = Math.ceil(filtered.length / PAGE);
+  const visible    = filtered.slice((page - 1) * PAGE, page * PAGE);
 
   const avg     = data.length ? data.reduce((s, c) => s + c.modalShare, 0) / data.length : 0;
   const best    = sorted[0];
@@ -103,7 +106,7 @@ export default function CyclingLeaderboard({ data }: { data: CountryCycling[] })
 
       {/* Rows */}
       {visible.map((c, i) => {
-        const rank = (page - 1) * PAGE + i + 1;
+        const rank = rankOf.get(c.code) ?? i + 1;
         const col  = getColor(c.modalShare);
         return (
           <div
@@ -134,7 +137,7 @@ export default function CyclingLeaderboard({ data }: { data: CountryCycling[] })
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-5 py-3 border-t text-sm" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30" style={{ border: "1px solid rgba(34,211,238,0.2)", color: "var(--glow-cyan)", background: "rgba(34,211,238,0.06)" }}>← Prev</button>
-          <span style={{ color: "var(--text-muted)" }}>{page} / {totalPages} · {sorted.length} nations</span>
+          <span style={{ color: "var(--text-muted)" }}>{page} / {totalPages} · {filtered.length === data.length ? data.length : `${filtered.length} of ${data.length}`} nations</span>
           <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30" style={{ border: "1px solid rgba(34,211,238,0.2)", color: "var(--glow-cyan)", background: "rgba(34,211,238,0.06)" }}>Next →</button>
         </div>
       )}

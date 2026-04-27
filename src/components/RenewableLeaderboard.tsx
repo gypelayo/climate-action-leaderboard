@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { CountryRenewable } from "@/types";
 
 const PAGE = 50;
@@ -55,16 +55,35 @@ function Rank({ n }: { n: number }) {
   );
 }
 
-export default function RenewableLeaderboard({ data }: { data: CountryRenewable[] }) {
+export default function RenewableLeaderboard({ data, search = "" }: { data: CountryRenewable[]; search?: string }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [page,     setPage]     = useState(1);
   const [asc,      setAsc]      = useState(false);
 
-  const sorted = [...data].sort((a, b) =>
-    asc ? a.renewablePercent - b.renewablePercent : b.renewablePercent - a.renewablePercent
+  // Full sorted list — source of truth for global ranks
+  const sorted = useMemo(() =>
+    [...data].sort((a, b) => asc ? a.renewablePercent - b.renewablePercent : b.renewablePercent - a.renewablePercent),
+    [data, asc]
   );
-  const totalPages = Math.ceil(sorted.length / PAGE);
-  const visible    = sorted.slice((page - 1) * PAGE, page * PAGE);
+
+  // code → 1-based global rank
+  const rankOf = useMemo(() => {
+    const m = new Map<string, number>();
+    sorted.forEach((c, i) => m.set(c.code, i + 1));
+    return m;
+  }, [sorted]);
+
+  // Filtered subset for display — preserves sort order
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sorted;
+    const q = search.toLowerCase();
+    return sorted.filter(c => c.country.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
+  }, [sorted, search]);
+
+  useEffect(() => { setPage(1); }, [search]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE);
+  const visible    = filtered.slice((page - 1) * PAGE, page * PAGE);
 
   const avg    = data.length ? data.reduce((s, c) => s + c.renewablePercent, 0) / data.length : 0;
   const best   = sorted[0];
@@ -72,6 +91,8 @@ export default function RenewableLeaderboard({ data }: { data: CountryRenewable[
 
   if (!data.length)
     return <p className="text-center py-16 text-sm" style={{ color: "var(--text-muted)" }}>No results</p>;
+  if (!filtered.length)
+    return <p className="text-center py-16 text-sm" style={{ color: "var(--text-muted)" }}>No results for "{search}"</p>;
 
   return (
     <>
@@ -110,7 +131,7 @@ export default function RenewableLeaderboard({ data }: { data: CountryRenewable[
 
       {/* Rows */}
       {visible.map((c, i) => {
-        const rank   = (page - 1) * PAGE + i + 1;
+        const rank   = rankOf.get(c.code) ?? 1;
         const col    = getColor(c.renewablePercent);
         const isOpen = expanded === c.code;
         const hasBD  = c.breakdown && Object.keys(c.breakdown).length > 0;
@@ -208,7 +229,7 @@ export default function RenewableLeaderboard({ data }: { data: CountryRenewable[
             ← Prev
           </button>
           <span style={{ color: "var(--text-muted)" }}>
-            {page} / {totalPages} · {sorted.length} nations
+            {page} / {totalPages} · {filtered.length === data.length ? data.length : `${filtered.length} of ${data.length}`} nations
           </span>
           <button
             disabled={page === totalPages}

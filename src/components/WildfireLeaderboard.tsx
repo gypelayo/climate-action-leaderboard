@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { CountryWildfire } from "@/types";
 
 const PAGE = 50;
@@ -35,7 +35,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
     </div>
   );
 }
-export default function WildfireLeaderboard({ data }: { data: CountryWildfire[] }) {
+export default function WildfireLeaderboard({ data, search = "" }: { data: CountryWildfire[]; search?: string }) {
   const [page, setPage] = useState(1);
   const [asc,  setAsc]  = useState(false);
   const [mode, setMode] = useState<"density" | "count">("density");
@@ -45,14 +45,17 @@ export default function WildfireLeaderboard({ data }: { data: CountryWildfire[] 
     const vb = mode === "density" ? b.fireDensity : b.fireCount;
     return asc ? va - vb : vb - va;
   });
-  const totalPages  = Math.ceil(sorted.length / PAGE);
-  const visible     = sorted.slice((page - 1) * PAGE, page * PAGE);
+  const rankOf = useMemo(() => { const m = new Map<string,number>(); sorted.forEach((c,i)=>m.set(c.code,i+1)); return m; }, [sorted]);
+  const filtered = useMemo(() => { if (!search.trim()) return sorted; const q=search.toLowerCase(); return sorted.filter(c=>c.country.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)); }, [sorted,search]);
+  useEffect(()=>{setPage(1);},[search]);
+  const totalPages  = Math.ceil(filtered.length / PAGE);
+  const visible     = filtered.slice((page - 1) * PAGE, page * PAGE);
   const isLive      = data.some(c => c.periodDays === 7);
   const liveCount   = data.filter(c => c.periodDays === 7).length;
   const worstDensity= data.reduce((best, c) => c.fireDensity > (best?.fireDensity ?? 0) ? c : best, data[0]);
   const worstCount  = data.reduce((best, c) => c.fireCount  > (best?.fireCount  ?? 0)  ? c : best, data[0]);
 
-  if (!data.length) return <p className="text-center py-16 text-sm" style={{ color: "var(--text-muted)" }}>No data</p>;
+  if (!filtered.length) return <p className="text-center py-16 text-sm" style={{ color: "var(--text-muted)" }}>No data</p>;
   const maxDensity = Math.max(...data.map(c => c.fireDensity));
   const maxCount   = Math.max(...data.map(c => c.fireCount));
 
@@ -94,7 +97,7 @@ export default function WildfireLeaderboard({ data }: { data: CountryWildfire[] 
       </div>
 
       {visible.map((c, i) => {
-        const rank  = (page - 1) * PAGE + i + 1;
+        const rank  = rankOf.get(c.code) ?? i + 1;
         const col   = getColor(c.fireDensity);
         const barV  = mode === "density" ? c.fireDensity : c.fireCount;
         const barM  = mode === "density" ? maxDensity    : maxCount;
@@ -123,7 +126,7 @@ export default function WildfireLeaderboard({ data }: { data: CountryWildfire[] 
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-5 py-3 border-t text-sm" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30" style={{ border: "1px solid rgba(34,211,238,0.2)", color: "var(--glow-cyan)", background: "rgba(34,211,238,0.06)" }}>← Prev</button>
-          <span style={{ color: "var(--text-muted)" }}>{page} / {totalPages} · {sorted.length} nations</span>
+          <span style={{ color: "var(--text-muted)" }}>{page} / {totalPages} · {filtered.length === data.length ? data.length : `${filtered.length} of ${data.length}`} nations</span>
           <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30" style={{ border: "1px solid rgba(34,211,238,0.2)", color: "var(--glow-cyan)", background: "rgba(34,211,238,0.06)" }}>Next →</button>
         </div>
       )}
