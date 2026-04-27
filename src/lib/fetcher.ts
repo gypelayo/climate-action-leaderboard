@@ -1,4 +1,4 @@
-import { BASELINE_RENEWABLE, BASELINE_CARBON, COUNTRY_FLAGS } from "./data";
+import { BASELINE_RENEWABLE, BASELINE_CARBON, getFlagEmoji } from "./data";
 import type { CountryRenewable, CountryCarbon } from "@/types";
 
 // Electricity Maps free API — zone-level real-time power breakdown
@@ -60,7 +60,7 @@ export async function getRenewableLeaderboard(): Promise<CountryRenewable[]> {
     results.set(code, {
       country: info.name,
       code,
-      flag: COUNTRY_FLAGS[code] || "🏳️",
+      flag: getFlagEmoji(code),
       renewablePercent: info.percent,
       source: "annual",
       updatedAt: "2023",
@@ -171,7 +171,7 @@ export async function getCarbonLeaderboard(): Promise<CountryCarbon[]> {
     results.push({
       country: info.name,
       code,
-      flag: COUNTRY_FLAGS[code] || "🏳️",
+      flag: getFlagEmoji(code),
       co2PerCapita: info.co2PerCapita,
       year: info.year,
       source: "Global Carbon Project / Our World in Data",

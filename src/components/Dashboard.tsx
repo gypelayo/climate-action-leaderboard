@@ -1,220 +1,326 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import type { CountryRenewable, CountryCarbon } from "@/types";
 import RenewableLeaderboard from "@/components/RenewableLeaderboard";
-import CarbonLeaderboard from "@/components/CarbonLeaderboard";
-import { RefreshCw, Zap, Leaf, Globe2, Info } from "lucide-react";
+import CarbonLeaderboard    from "@/components/CarbonLeaderboard";
+import StarField            from "@/components/StarField";
+import Globe                from "@/components/Globe";
+import { RefreshCw }        from "lucide-react";
+
+function useMissionClock() {
+  const [time, setTime] = useState("");
+  useEffect(() => {
+    const tick = () =>
+      setTime(new Date().toUTCString().slice(17, 25) + " UTC");
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
 
 type Tab = "renewable" | "carbon";
 
 export default function Dashboard() {
-  const [tab, setTab] = useState<Tab>("renewable");
   const [renewable, setRenewable] = useState<CountryRenewable[]>([]);
-  const [carbon, setCarbon] = useState<CountryCarbon[]>([]);
-  const [lastFetched, setLastFetched] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [carbon,    setCarbon]    = useState<CountryCarbon[]>([]);
+  const [lastFetched, setLastFetched] = useState("");
+  const [loading,   setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch] = useState("");
-  const [showInfo, setShowInfo] = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+  const [tab,       setTab]       = useState<Tab>("renewable");
+  const [renewSearch, setRenewSearch] = useState("");
+  const [carbSearch,  setCarbSearch]  = useState("");
+  const clock = useMissionClock();
 
-  // NEXT_PUBLIC_BASE_PATH is set to /climate-action-leaderboard in GitHub Actions;
-  // empty string locally — so the fetch always resolves correctly.
   const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
+    silent ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${BASE}/data/combined.json`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load data");
-      const json = await res.json();
-      setRenewable(json.renewable || []);
-      setCarbon(json.carbon || []);
-      setLastFetched(json.lastFetched || "");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      setRenewable(j.renewable ?? []);
+      setCarbon(j.carbon ?? []);
+      setLastFetched(j.lastFetched ?? "");
     } catch (e: any) {
-      setError(e.message || "Unknown error");
+      setError(e.message ?? "Unknown error");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [BASE]);
 
   useEffect(() => {
     fetchData();
-    // Auto-refresh every 15 minutes
-    const interval = setInterval(() => fetchData(true), 15 * 60 * 1000);
-    return () => clearInterval(interval);
+    const id = setInterval(() => fetchData(true), 15 * 60 * 1000);
+    return () => clearInterval(id);
   }, [fetchData]);
 
-  const filteredRenewable = renewable.filter(
-    (c) =>
-      c.country.toLowerCase().includes(search.toLowerCase()) ||
-      c.code.toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredCarbon = carbon.filter(
-    (c) =>
-      c.country.toLowerCase().includes(search.toLowerCase()) ||
-      c.code.toLowerCase().includes(search.toLowerCase())
-  );
+  const liveCount   = renewable.filter(c => c.source === "live").length;
+  const recentCount = renewable.filter(c => c.source === "recent").length;
+  const totalCountries = Math.max(renewable.length, carbon.length);
 
-  const liveCount = renewable.filter((c) => c.source === "live").length;
-  const recentCount = renewable.filter((c) => c.source === "recent").length;
+  const freshLabel = lastFetched
+    ? new Date(lastFetched).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "—";
+
+  const filteredR = renewable.filter(c =>
+    c.country.toLowerCase().includes(renewSearch.toLowerCase()) ||
+    c.code.toLowerCase().includes(renewSearch.toLowerCase())
+  );
+  const filteredC = carbon.filter(c =>
+    c.country.toLowerCase().includes(carbSearch.toLowerCase()) ||
+    c.code.toLowerCase().includes(carbSearch.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-black/30 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center shadow-lg">
-              <Globe2 className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                Climate Action Leaderboard
+    <div className="relative min-h-screen overflow-hidden" style={{ zIndex: 3 }}>
+      <StarField />
+
+      {/* Everything above the starfield */}
+      <div className="relative" style={{ zIndex: 4 }}>
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <header
+          className="sticky top-0 border-b px-4 py-3"
+          style={{
+            zIndex: 50,
+            borderColor: "var(--hud-border)",
+            background: "rgba(0,6,18,0.85)",
+            backdropFilter: "blur(14px)",
+          }}
+        >
+          <div className="max-w-[1600px] mx-auto flex items-center gap-4 flex-wrap">
+            <Globe />
+
+            {/* Title block */}
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-[10px] font-mono tracking-[0.3em] uppercase mb-0.5"
+                style={{ color: "rgba(0,229,255,0.5)" }}
+              >
+                ◈ ORBITAL CLIMATE MONITOR · EARTH
+              </div>
+              <h1
+                className="text-base sm:text-xl font-bold tracking-widest uppercase leading-tight glow-cyan"
+                style={{ color: "var(--hud-cyan)", fontFamily: "var(--font-mono)" }}
+              >
+                WORLD CLIMATE ACTION LEADERBOARD
               </h1>
-              <p className="text-xs text-emerald-400/80">World rankings · Updated in real-time</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+                <StatusPill color="green" label={`${totalCountries} NATIONS TRACKED`} />
+                {liveCount > 0 && <StatusPill color="green" blink label={`${liveCount} LIVE`} />}
+                {recentCount > 0 && <StatusPill color="amber" label={`${recentCount} NEAR-REAL-TIME`} />}
+                <StatusPill color="cyan" label={`DATA: ${freshLabel}`} />
+              </div>
+            </div>
+
+            {/* Right: clock + refresh */}
+            <div className="flex items-center gap-3 ml-auto">
+              <div className="text-right hidden sm:block">
+                <div className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(0,229,255,0.4)" }}>
+                  MISSION CLOCK
+                </div>
+                <div
+                  className="text-sm font-mono font-bold animate-data-flicker glow-cyan"
+                  style={{ color: "var(--hud-cyan)" }}
+                >
+                  {clock}
+                </div>
+              </div>
+              <button
+                onClick={() => fetchData(true)}
+                disabled={refreshing || loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold tracking-widest uppercase transition-all disabled:opacity-40"
+                style={{
+                  border: "1px solid rgba(0,229,255,0.3)",
+                  color: "var(--hud-cyan)",
+                  background: "rgba(0,229,255,0.05)",
+                }}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">REFRESH</span>
+              </button>
             </div>
           </div>
+        </header>
 
-          <div className="flex items-center gap-3">
-            {lastFetched && (
-              <span className="hidden sm:block text-xs text-slate-400">
-                Updated {new Date(lastFetched).toLocaleTimeString()}
-              </span>
-            )}
-            <button
-              onClick={() => fetchData(true)}
-              disabled={refreshing || loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-sm font-medium transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <button
-              onClick={() => setShowInfo(!showInfo)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-white transition-all"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* ── Content ────────────────────────────────────────────────────── */}
+        <main className="max-w-[1600px] mx-auto p-4">
 
-        {/* Info banner */}
-        {showInfo && (
-          <div className="max-w-7xl mx-auto px-4 pb-4">
-            <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 text-sm text-slate-300 space-y-1">
-              <p>
-                <span className="text-emerald-400 font-semibold">🟢 Live</span> — Real-time data from Electricity Maps API (15-min intervals, key required)
-              </p>
-              <p>
-                <span className="text-yellow-400 font-semibold">🟡 Recent</span> — Near real-time from Energy-Charts.info / ENTSO-E (no key needed, European grids)
-              </p>
-              <p>
-                <span className="text-slate-400 font-semibold">⚪ Annual</span> — Annual averages from Our World in Data / Global Carbon Project (2022-2023)
-              </p>
-              <p className="text-slate-500 text-xs pt-1">
-                Carbon footprint data: Global Carbon Project &amp; Our World in Data. Renewable % = share of electricity generation excluding nuclear.
+          {/* Loading state */}
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-40 gap-5">
+              <div
+                className="w-14 h-14 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: "var(--hud-cyan)", borderTopColor: "transparent" }}
+              />
+              <p className="font-mono text-xs tracking-widest uppercase" style={{ color: "rgba(0,229,255,0.5)" }}>
+                ACQUIRING TELEMETRY…
               </p>
             </div>
-          </div>
-        )}
-      </header>
-
-      {/* Data freshness badges */}
-      {!loading && (
-        <div className="max-w-7xl mx-auto px-4 pt-4 flex gap-3 flex-wrap">
-          {liveCount > 0 && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
-              {liveCount} countries live
-            </span>
           )}
-          {recentCount > 0 && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
-              {recentCount} near real-time
-            </span>
+
+          {error && !loading && (
+            <div
+              className="text-center p-6 font-mono text-sm border rounded"
+              style={{ borderColor: "rgba(255,59,59,0.3)", color: "var(--hud-red)", background: "rgba(255,0,0,0.05)" }}
+            >
+              ⚠ SIGNAL ERROR: {error} —{" "}
+              <button onClick={() => fetchData()} className="underline hover:opacity-70">RETRY</button>
+            </div>
           )}
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-500/15 border border-slate-500/30 text-slate-400 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
-            {renewable.length - liveCount - recentCount} annual baseline
-          </span>
-        </div>
-      )}
 
-      {/* Tab bar + Search */}
-      <div className="max-w-7xl mx-auto px-4 pt-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex rounded-xl bg-black/30 border border-white/10 p-1 gap-1">
-          <button
-            onClick={() => setTab("renewable")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              tab === "renewable"
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Zap className="w-4 h-4" />
-            Renewable Energy
-          </button>
-          <button
-            onClick={() => setTab("carbon")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              tab === "carbon"
-                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Leaf className="w-4 h-4" />
-            Carbon Footprint
-          </button>
-        </div>
+          {!loading && !error && (
+            <>
+              {/* Mobile tabs */}
+              <div className="flex lg:hidden gap-2 mb-4">
+                {(["renewable", "carbon"] as Tab[]).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    className="flex-1 py-2 text-xs font-mono font-bold tracking-widest uppercase transition-all"
+                    style={{
+                      border: "1px solid",
+                      borderColor: tab === t ? "var(--hud-cyan)" : "rgba(0,229,255,0.2)",
+                      color:       tab === t ? "var(--hud-cyan)" : "rgba(0,229,255,0.4)",
+                      background:  tab === t ? "rgba(0,229,255,0.08)" : "transparent",
+                    }}
+                  >
+                    {t === "renewable" ? "⚡ RENEWABLE" : "🌿 CARBON"}
+                  </button>
+                ))}
+              </div>
 
-        <input
-          type="text"
-          placeholder="Search country…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:w-64 px-4 py-2 rounded-xl bg-black/30 border border-white/10 text-white placeholder-slate-500 text-sm outline-none focus:border-emerald-500/50 transition-colors"
-        />
+              {/* Desktop: two panels side-by-side / Mobile: single tab */}
+              <div className="flex flex-col lg:flex-row gap-4">
+
+                {/* Renewable panel */}
+                <div className={`flex-1 min-w-0 ${tab === "carbon" ? "hidden lg:flex lg:flex-col" : "flex flex-col"}`}>
+                  <PanelHeader
+                    title="⚡ RENEWABLE ENERGY"
+                    subtitle="% of electricity from clean sources"
+                    search={renewSearch}
+                    onSearch={setRenewSearch}
+                    count={filteredR.length}
+                  />
+                  <div
+                    className="hud-panel flex-1 overflow-y-auto animate-slide-in"
+                    style={{ maxHeight: "calc(100vh - 220px)" }}
+                  >
+                    <span className="hud-corner-bl" /><span className="hud-corner-br" />
+                    <RenewableLeaderboard data={filteredR} />
+                  </div>
+                </div>
+
+                {/* Divider (desktop only) */}
+                <div
+                  className="hidden lg:block w-px flex-shrink-0 self-stretch"
+                  style={{ background: "linear-gradient(to bottom, transparent, var(--hud-border), transparent)" }}
+                />
+
+                {/* Carbon panel */}
+                <div className={`flex-1 min-w-0 ${tab === "renewable" ? "hidden lg:flex lg:flex-col" : "flex flex-col"}`}>
+                  <PanelHeader
+                    title="🌿 CARBON FOOTPRINT"
+                    subtitle="tonnes CO₂ per capita per year"
+                    search={carbSearch}
+                    onSearch={setCarbSearch}
+                    count={filteredC.length}
+                  />
+                  <div
+                    className="hud-panel flex-1 overflow-y-auto animate-slide-in"
+                    style={{ maxHeight: "calc(100vh - 220px)" }}
+                  >
+                    <span className="hud-corner-bl" /><span className="hud-corner-br" />
+                    <CarbonLeaderboard data={filteredC} />
+                  </div>
+                </div>
+
+              </div>
+            </>
+          )}
+        </main>
+
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <footer
+          className="text-center font-mono text-[9px] tracking-widest py-6 border-t"
+          style={{ borderColor: "var(--hud-border)", color: "rgba(0,229,255,0.25)" }}
+        >
+          DATA SOURCES: ELECTRICITY MAPS · ENERGY-CHARTS.INFO (FRAUNHOFER ISE / ENTSO-E) · GLOBAL CARBON PROJECT · OUR WORLD IN DATA
+          <br />
+          <a
+            href="https://github.com/gypelayo/climate-action-leaderboard"
+            className="hover:opacity-60 transition-opacity"
+          >
+            GITHUB.COM/GYPELAYO/CLIMATE-ACTION-LEADERBOARD
+          </a>
+        </footer>
       </div>
+    </div>
+  );
+}
 
-      {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {loading && (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-            <p className="text-slate-400 text-sm">Fetching climate data…</p>
-          </div>
-        )}
+/* ─── Sub-components ────────────────────────────────────────────────────────── */
 
-        {error && !loading && (
-          <div className="rounded-xl bg-red-900/20 border border-red-500/30 p-6 text-center text-red-400">
-            {error} —{" "}
-            <button onClick={() => fetchData()} className="underline hover:text-red-300">
-              retry
-            </button>
-          </div>
-        )}
+function StatusPill({
+  color, label, blink,
+}: { color: "green" | "amber" | "cyan" | "red"; label: string; blink?: boolean }) {
+  const colors = {
+    green: { dot: "#00ff88", text: "rgba(0,255,136,0.7)" },
+    cyan:  { dot: "#00e5ff", text: "rgba(0,229,255,0.6)" },
+    amber: { dot: "#ffaa00", text: "rgba(255,170,0,0.7)" },
+    red:   { dot: "#ff3b3b", text: "rgba(255,59,59,0.8)" },
+  }[color];
+  return (
+    <span className="flex items-center gap-1" style={{ color: colors.text }}>
+      <span
+        className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${blink ? "animate-blink" : "animate-pulse-dot"}`}
+        style={{ background: colors.dot, color: colors.dot }}
+      />
+      <span className="text-[9px] font-mono tracking-widest uppercase">{label}</span>
+    </span>
+  );
+}
 
-        {!loading && !error && tab === "renewable" && (
-          <RenewableLeaderboard data={filteredRenewable} />
-        )}
-        {!loading && !error && tab === "carbon" && (
-          <CarbonLeaderboard data={filteredCarbon} />
-        )}
-      </main>
-
-      <footer className="text-center text-xs text-slate-600 py-8 border-t border-white/5">
-        Data sources: Electricity Maps · Energy-Charts.info (Fraunhofer ISE / ENTSO-E) · Global Carbon Project · Our World in Data
-        <br />
-        <a href="https://github.com/gypelayo/climate-action-leaderboard" className="hover:text-slate-400 transition-colors mt-1 inline-block">
-          github.com/gypelayo/climate-action-leaderboard
-        </a>
-      </footer>
+function PanelHeader({
+  title, subtitle, search, onSearch, count,
+}: {
+  title: string; subtitle: string;
+  search: string; onSearch: (v: string) => void;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+      <div>
+        <div
+          className="text-xs font-mono font-bold tracking-widest uppercase glow-cyan"
+          style={{ color: "var(--hud-cyan)" }}
+        >
+          {title}
+        </div>
+        <div className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(0,229,255,0.35)" }}>
+          {subtitle} · {count} nations
+        </div>
+      </div>
+      <input
+        type="text"
+        placeholder="SEARCH…"
+        value={search}
+        onChange={e => onSearch(e.target.value)}
+        className="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-transparent outline-none w-40 transition-all"
+        style={{
+          border: "1px solid rgba(0,229,255,0.2)",
+          color: "var(--hud-cyan)",
+          caretColor: "var(--hud-cyan)",
+        }}
+        onFocus={e => (e.target.style.borderColor = "rgba(0,229,255,0.6)")}
+        onBlur={e  => (e.target.style.borderColor = "rgba(0,229,255,0.2)")}
+      />
     </div>
   );
 }

@@ -1,135 +1,206 @@
 "use client";
 
+import { useState } from "react";
 import type { CountryCarbon } from "@/types";
 
-function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1) return <span className="text-lg">🥇</span>;
-  if (rank === 2) return <span className="text-lg">🥈</span>;
-  if (rank === 3) return <span className="text-lg">🥉</span>;
-  return <span className="text-slate-400 font-mono text-sm w-6 text-center">{rank}</span>;
+const PAGE       = 50;
+const PARIS      = 2.0;   // tonnes — Paris pathway target
+const BAR_MAX    = 32.0;  // scale cap for the bar
+
+function SegBar({ co2, color }: { co2: number; color: string }) {
+  const filled = Math.max(0, Math.min(20, Math.round((co2 / BAR_MAX) * 20)));
+  const parisAt = Math.round((PARIS / BAR_MAX) * 20);
+  return (
+    <span className="seg-bar flex items-center gap-px" style={{ color }}>
+      {Array.from({ length: 20 }, (_, i) => (
+        <span
+          key={i}
+          style={{
+            opacity: i < filled ? 1 : 0.12,
+            color: i === parisAt ? "rgba(0,255,136,0.8)" : color,
+          }}
+        >
+          {i === parisAt ? "|" : "█"}
+        </span>
+      ))}
+    </span>
+  );
 }
 
-function getBarColor(co2: number) {
-  if (co2 <= 1) return "bg-gradient-to-r from-emerald-500 to-teal-400";
-  if (co2 <= 3) return "bg-gradient-to-r from-teal-500 to-cyan-400";
-  if (co2 <= 6) return "bg-gradient-to-r from-yellow-500 to-amber-400";
-  if (co2 <= 10) return "bg-gradient-to-r from-orange-500 to-amber-500";
-  return "bg-gradient-to-r from-red-600 to-rose-500";
+function getColor(co2: number): string {
+  if (co2 <= 0.5)  return "var(--hud-green)";
+  if (co2 <= 2.0)  return "#00ffcc";
+  if (co2 <= 5.0)  return "var(--hud-cyan)";
+  if (co2 <= 10.0) return "var(--hud-amber)";
+  if (co2 <= 18.0) return "#ff8800";
+  return "var(--hud-red)";
 }
 
-function getScoreColor(co2: number) {
-  if (co2 <= 1) return "text-emerald-400";
-  if (co2 <= 3) return "text-teal-400";
-  if (co2 <= 6) return "text-yellow-400";
-  if (co2 <= 10) return "text-orange-400";
-  return "text-red-400";
+function RankLabel({ n }: { n: number }) {
+  const medals: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+  if (medals[n]) return <span className="text-base leading-none">{medals[n]}</span>;
+  return (
+    <span className="font-mono text-[10px] tabular-nums" style={{ color: "rgba(0,229,255,0.3)" }}>
+      {String(n).padStart(3, "0")}
+    </span>
+  );
 }
-
-// Paris Agreement target: ~2t CO2 per capita by 2050
-const PARIS_TARGET = 2.0;
-const MAX_DISPLAY = 35; // tonnes for bar scale
 
 export default function CarbonLeaderboard({ data }: { data: CountryCarbon[] }) {
-  if (data.length === 0)
-    return <p className="text-center text-slate-500 py-16">No results found.</p>;
+  const [page,    setPage]    = useState(1);
+  const [sortAsc, setSortAsc] = useState(true);
 
-  const avg = data.reduce((s, c) => s + c.co2PerCapita, 0) / data.length;
-  const underTarget = data.filter((c) => c.co2PerCapita <= PARIS_TARGET).length;
-  const worst = [...data].sort((a, b) => b.co2PerCapita - a.co2PerCapita)[0];
+  const sorted = [...data].sort((a, b) =>
+    sortAsc ? a.co2PerCapita - b.co2PerCapita : b.co2PerCapita - a.co2PerCapita
+  );
+
+  const totalPages = Math.ceil(sorted.length / PAGE);
+  const visible    = sorted.slice((page - 1) * PAGE, page * PAGE);
+
+  const avg       = data.length ? data.reduce((s, c) => s + c.co2PerCapita, 0) / data.length : 0;
+  const best      = sortAsc ? sorted[0] : sorted[sorted.length - 1];
+  const worst     = sortAsc ? sorted[sorted.length - 1] : sorted[0];
+  const onTrack   = data.filter(c => c.co2PerCapita <= PARIS).length;
+
+  if (!data.length)
+    return (
+      <p className="text-center py-16 font-mono text-xs" style={{ color: "rgba(0,229,255,0.4)" }}>
+        NO SIGNAL
+      </p>
+    );
 
   return (
-    <div>
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+    <div className="text-[11px]">
+
+      {/* ── Stats strip ─────────────────────────────────────────────── */}
+      <div
+        className="grid grid-cols-2 sm:grid-cols-4 gap-px border-b"
+        style={{ borderColor: "rgba(0,229,255,0.08)", background: "rgba(0,229,255,0.04)" }}
+      >
         {[
-          { label: "Lowest footprint", value: `${data[0]?.flag} ${data[0]?.country}`, sub: `${data[0]?.co2PerCapita} t CO₂/person` },
-          { label: "Highest footprint", value: `${worst?.flag} ${worst?.country}`, sub: `${worst?.co2PerCapita} t CO₂/person` },
-          { label: "Global avg", value: `${avg.toFixed(1)} t`, sub: "tonnes CO₂ / person / yr" },
-          { label: "≤2t (Paris path)", value: `${underTarget}`, sub: `of ${data.length} countries` },
-        ].map((card) => (
-          <div key={card.label} className="rounded-xl bg-black/30 border border-white/10 p-4">
-            <p className="text-xs text-slate-500 mb-1">{card.label}</p>
-            <p className="text-white font-bold text-sm sm:text-base">{card.value}</p>
-            <p className="text-emerald-400 text-xs">{card.sub}</p>
+          { label: "GLOBAL AVG",     val: `${avg.toFixed(1)} t`,    color: "var(--hud-cyan)"  },
+          { label: "LOWEST (BEST)",  val: best ? `${best.flag} ${best.country}` : "—",  sub: best  ? `${best.co2PerCapita} t`  : "", color: "var(--hud-green)" },
+          { label: "HIGHEST (WORST)",val: worst? `${worst.flag} ${worst.country}` : "—", sub: worst ? `${worst.co2PerCapita} t` : "", color: "var(--hud-red)"   },
+          { label: "PARIS-TRACK ≤2t",val: `${onTrack}/${data.length}`, color: "var(--hud-amber)" },
+        ].map(s => (
+          <div key={s.label} className="px-3 py-2.5" style={{ background: "rgba(0,6,18,0.6)" }}>
+            <div className="font-mono text-[8px] tracking-widest mb-1" style={{ color: "rgba(0,229,255,0.35)" }}>
+              {s.label}
+            </div>
+            <div className="font-mono font-bold text-xs truncate" style={{ color: s.color }}>
+              {s.val}
+            </div>
+            {s.sub && <div className="font-mono text-[9px]" style={{ color: s.color }}>{s.sub}</div>}
           </div>
         ))}
       </div>
 
-      {/* Paris target callout */}
-      <div className="mb-4 flex items-center gap-2 px-4 py-3 rounded-xl bg-emerald-900/20 border border-emerald-500/20 text-sm text-emerald-300">
-        <span className="text-lg">🎯</span>
-        <span>
-          Paris Agreement pathway: <strong>≤2 tonnes CO₂ per person per year by 2050</strong>.
-          Only <strong>{underTarget} of {data.length}</strong> tracked countries are already there.
+      {/* Paris callout */}
+      <div
+        className="px-3 py-2 border-b flex items-center gap-2"
+        style={{ borderColor: "rgba(0,229,255,0.08)", background: "rgba(0,255,136,0.03)" }}
+      >
+        <span className="text-sm">🎯</span>
+        <span className="font-mono text-[9px] tracking-wide" style={{ color: "rgba(0,255,136,0.6)" }}>
+          PARIS AGREEMENT TARGET: ≤2 t CO₂ PER PERSON / YEAR BY 2050 · GREEN MARKER ( | ) ON BAR ·{" "}
+          <strong style={{ color: "var(--hud-green)" }}>{onTrack} OF {data.length}</strong> NATIONS ALREADY ON TRACK
         </span>
       </div>
 
-      {/* Table header */}
-      <div className="rounded-t-xl bg-black/40 border border-white/10 border-b-0 px-4 py-3 grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-        <div className="col-span-1 text-center">#</div>
-        <div className="col-span-4">Country</div>
-        <div className="col-span-5 text-right">CO₂ per capita (t/yr)</div>
-        <div className="col-span-2 text-right">Year</div>
+      {/* ── Column header ───────────────────────────────────────────── */}
+      <div
+        className="grid grid-cols-12 gap-1 px-3 py-2 border-b font-mono text-[8px] tracking-widest uppercase sticky top-0"
+        style={{ borderColor: "rgba(0,229,255,0.08)", color: "rgba(0,229,255,0.35)", background: "rgba(0,6,18,0.95)", zIndex: 10 }}
+      >
+        <div className="col-span-1 text-center">RNK</div>
+        <div className="col-span-3">NATION</div>
+        <div className="col-span-6">
+          <button
+            className="hover:opacity-80 transition-opacity flex items-center gap-1"
+            onClick={() => { setSortAsc(s => !s); setPage(1); }}
+          >
+            CO₂/CAPITA (t/yr) {sortAsc ? "▲" : "▼"}
+          </button>
+        </div>
+        <div className="col-span-2 text-right">YEAR</div>
       </div>
 
-      {/* Rows */}
-      <div className="rounded-b-xl border border-white/10 overflow-hidden divide-y divide-white/5">
-        {data.map((country, idx) => {
-          const atParis = country.co2PerCapita <= PARIS_TARGET;
-          return (
-            <div
-              key={country.code}
-              className={`px-4 py-3.5 grid grid-cols-12 gap-2 items-center bg-black/20 hover:bg-white/5 transition-colors ${
-                atParis ? "border-l-2 border-emerald-500/50" : ""
-              }`}
-            >
-              <div className="col-span-1 flex justify-center">
-                <RankBadge rank={idx + 1} />
-              </div>
+      {/* ── Rows ────────────────────────────────────────────────────── */}
+      {visible.map((c, i) => {
+        const rank    = (page - 1) * PAGE + i + 1;
+        const col     = getColor(c.co2PerCapita);
+        const onParis = c.co2PerCapita <= PARIS;
 
-              <div className="col-span-4 flex items-center gap-2.5">
-                <span className="text-xl leading-none">{country.flag}</span>
-                <div>
-                  <p className="text-white text-sm font-medium leading-tight">{country.country}</p>
-                  <p className="text-slate-500 text-xs">{country.code}</p>
-                </div>
-              </div>
-
-              <div className="col-span-5">
-                <div className="flex justify-end items-center gap-2 mb-1">
-                  <span className={`text-sm font-bold font-mono ${getScoreColor(country.co2PerCapita)}`}>
-                    {country.co2PerCapita.toFixed(1)} t
-                  </span>
-                  {atParis && (
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold">
-                      ✓ Paris
-                    </span>
-                  )}
-                </div>
-                {/* Bar: scaled so 35t = full width */}
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${getBarColor(country.co2PerCapita)}`}
-                    style={{ width: `${Math.min(100, (country.co2PerCapita / MAX_DISPLAY) * 100)}%` }}
-                  />
-                  {/* Paris target marker */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-emerald-400/60"
-                    style={{ left: `${(PARIS_TARGET / MAX_DISPLAY) * 100}%` }}
-                    title="Paris target (2t)"
-                  />
-                </div>
-              </div>
-
-              <div className="col-span-2 text-right text-xs text-slate-500">{country.year}</div>
+        return (
+          <div
+            key={c.code}
+            className="hud-row grid grid-cols-12 gap-1 px-3 py-2.5 items-center"
+            style={onParis ? { borderLeft: "2px solid rgba(0,255,136,0.5)" } : {}}
+          >
+            <div className="col-span-1 flex justify-center">
+              <RankLabel n={rank} />
             </div>
-          );
-        })}
-      </div>
 
-      <p className="text-xs text-slate-600 mt-3 text-center">
-        Source: Global Carbon Project · Our World in Data (2022 data, latest available). Green bar marker = 2t Paris target.
-      </p>
+            <div className="col-span-3 flex items-center gap-2 min-w-0">
+              <span className="text-base leading-none flex-shrink-0">{c.flag}</span>
+              <div className="min-w-0">
+                <div className="font-mono font-bold text-[10px] truncate" style={{ color: "#c8ffe8" }}>
+                  {c.country.toUpperCase()}
+                </div>
+                <div className="font-mono text-[8px]" style={{ color: "rgba(0,229,255,0.3)" }}>
+                  {c.code}
+                </div>
+              </div>
+            </div>
+
+            <div className="col-span-6 flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-xs tabular-nums" style={{ color: col }}>
+                  {c.co2PerCapita.toFixed(2)} t
+                </span>
+                {onParis && (
+                  <span className="font-mono text-[8px] tracking-widest" style={{ color: "var(--hud-green)" }}>
+                    ✓ PARIS
+                  </span>
+                )}
+              </div>
+              <SegBar co2={c.co2PerCapita} color={col} />
+            </div>
+
+            <div className="col-span-2 text-right font-mono text-[9px]" style={{ color: "rgba(0,229,255,0.3)" }}>
+              {c.year}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* ── Pagination ──────────────────────────────────────────────── */}
+      {totalPages > 1 && (
+        <div
+          className="flex items-center justify-between px-4 py-3 border-t"
+          style={{ borderColor: "rgba(0,229,255,0.08)" }}
+        >
+          <button
+            disabled={page === 1}
+            onClick={() => setPage(p => p - 1)}
+            className="font-mono text-[9px] tracking-widest px-3 py-1 border transition-all disabled:opacity-30"
+            style={{ borderColor: "rgba(0,229,255,0.25)", color: "var(--hud-cyan)" }}
+          >
+            ◀ PREV
+          </button>
+          <span className="font-mono text-[9px] tracking-widest" style={{ color: "rgba(0,229,255,0.4)" }}>
+            PAGE {page} / {totalPages}  ·  {sorted.length} NATIONS
+          </span>
+          <button
+            disabled={page === totalPages}
+            onClick={() => setPage(p => p + 1)}
+            className="font-mono text-[9px] tracking-widest px-3 py-1 border transition-all disabled:opacity-30"
+            style={{ borderColor: "rgba(0,229,255,0.25)", color: "var(--hud-cyan)" }}
+          >
+            NEXT ▶
+          </button>
+        </div>
+      )}
     </div>
   );
 }

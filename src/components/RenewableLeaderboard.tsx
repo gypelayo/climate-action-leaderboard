@@ -1,195 +1,239 @@
 "use client";
 
-import type { CountryRenewable } from "@/types";
 import { useState } from "react";
+import type { CountryRenewable } from "@/types";
 
-type SortKey = "rank" | "renewablePercent" | "country";
+const PAGE = 50;
 
-function SourceBadge({ source }: { source: CountryRenewable["source"] }) {
+/** Unicode block bar — fills N of 20 segments */
+function SegBar({ pct, color }: { pct: number; color: string }) {
+  const filled = Math.max(0, Math.min(20, Math.round((pct / 100) * 20)));
+  return (
+    <span className="seg-bar" style={{ color }}>
+      {"█".repeat(filled)}
+      <span style={{ color, opacity: 0.15 }}>{"█".repeat(20 - filled)}</span>
+    </span>
+  );
+}
+
+function getColor(pct: number): string {
+  if (pct >= 90) return "var(--hud-green)";
+  if (pct >= 65) return "#00ffcc";
+  if (pct >= 45) return "var(--hud-cyan)";
+  if (pct >= 25) return "var(--hud-amber)";
+  if (pct >= 10) return "#ff8800";
+  return "var(--hud-red)";
+}
+
+function SourceTag({ source }: { source: CountryRenewable["source"] }) {
   if (source === "live")
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-        LIVE
+      <span className="font-mono text-[9px] tracking-widest" style={{ color: "var(--hud-green)" }}>
+        <span className="animate-blink">●</span> LIVE
       </span>
     );
   if (source === "recent")
     return (
-      <span className="flex items-center gap-1 text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" />
-        RECENT
+      <span className="font-mono text-[9px] tracking-widest" style={{ color: "var(--hud-amber)" }}>
+        ◉ NEAR-RT
       </span>
     );
   return (
-    <span className="text-[10px] text-slate-500 bg-slate-500/10 px-1.5 py-0.5 rounded-full">
-      ANNUAL
+    <span className="font-mono text-[9px] tracking-widest" style={{ color: "rgba(0,229,255,0.3)" }}>
+      ○ ANNUAL
     </span>
   );
 }
 
-function RankBadge({ rank }: { rank: number }) {
-  if (rank === 1)
-    return <span className="text-lg" title="1st">🥇</span>;
-  if (rank === 2)
-    return <span className="text-lg" title="2nd">🥈</span>;
-  if (rank === 3)
-    return <span className="text-lg" title="3rd">🥉</span>;
+function RankLabel({ n }: { n: number }) {
+  const medals: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
+  if (medals[n]) return <span className="text-base leading-none">{medals[n]}</span>;
   return (
-    <span className="text-slate-400 font-mono text-sm w-6 text-center">
-      {rank}
+    <span className="font-mono text-[10px] tabular-nums" style={{ color: "rgba(0,229,255,0.3)" }}>
+      {String(n).padStart(3, "0")}
     </span>
   );
-}
-
-function BarChart({ percent, color }: { percent: number; color: string }) {
-  return (
-    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-      <div
-        className={`h-full rounded-full transition-all duration-700 ${color}`}
-        style={{ width: `${Math.min(100, percent)}%` }}
-      />
-    </div>
-  );
-}
-
-function getBarColor(percent: number) {
-  if (percent >= 80) return "bg-gradient-to-r from-emerald-500 to-teal-400";
-  if (percent >= 60) return "bg-gradient-to-r from-teal-500 to-cyan-400";
-  if (percent >= 40) return "bg-gradient-to-r from-yellow-500 to-amber-400";
-  if (percent >= 20) return "bg-gradient-to-r from-orange-500 to-amber-500";
-  return "bg-gradient-to-r from-red-600 to-rose-500";
-}
-
-function getScoreColor(percent: number) {
-  if (percent >= 80) return "text-emerald-400";
-  if (percent >= 60) return "text-teal-400";
-  if (percent >= 40) return "text-yellow-400";
-  if (percent >= 20) return "text-orange-400";
-  return "text-red-400";
 }
 
 export default function RenewableLeaderboard({ data }: { data: CountryRenewable[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [sort, setSort] = useState<SortKey>("renewablePercent");
-  const [asc, setAsc] = useState(false);
+  const [page, setPage]         = useState(1);
+  const [sortAsc, setSortAsc]   = useState(false);
 
-  const sorted = [...data].sort((a, b) => {
-    let v = 0;
-    if (sort === "renewablePercent") v = a.renewablePercent - b.renewablePercent;
-    else if (sort === "country") v = a.country.localeCompare(b.country);
-    else v = 0; // rank = already sorted by percent desc
-    return asc ? v : -v;
-  });
+  const sorted = [...data].sort((a, b) =>
+    sortAsc ? a.renewablePercent - b.renewablePercent : b.renewablePercent - a.renewablePercent
+  );
 
-  const handleSort = (key: SortKey) => {
-    if (sort === key) setAsc(!asc);
-    else { setSort(key); setAsc(false); }
-  };
+  const totalPages = Math.ceil(sorted.length / PAGE);
+  const visible    = sorted.slice((page - 1) * PAGE, page * PAGE);
 
-  if (data.length === 0)
-    return <p className="text-center text-slate-500 py-16">No results found.</p>;
+  // Summary stats
+  const avg  = data.length ? data.reduce((s, c) => s + c.renewablePercent, 0) / data.length : 0;
+  const best = data[0];
+  const worst = data[data.length - 1];
+  const over50 = data.filter(c => c.renewablePercent >= 50).length;
+
+  if (!data.length)
+    return (
+      <p className="text-center py-16 font-mono text-xs" style={{ color: "rgba(0,229,255,0.4)" }}>
+        NO SIGNAL
+      </p>
+    );
 
   return (
-    <div>
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+    <div className="text-[11px]">
+
+      {/* ── Stats strip ─────────────────────────────────────────────── */}
+      <div
+        className="grid grid-cols-2 sm:grid-cols-4 gap-px border-b"
+        style={{ borderColor: "rgba(0,229,255,0.08)", background: "rgba(0,229,255,0.04)" }}
+      >
         {[
-          { label: "Highest renewable", value: `${data[0]?.flag} ${data[0]?.country}`, sub: `${data[0]?.renewablePercent.toFixed(1)}%` },
-          { label: "Lowest renewable", value: `${data[data.length - 1]?.flag} ${data[data.length - 1]?.country}`, sub: `${data[data.length - 1]?.renewablePercent.toFixed(1)}%` },
-          { label: "Global avg", value: `${(data.reduce((s, c) => s + c.renewablePercent, 0) / data.length).toFixed(1)}%`, sub: `${data.length} countries` },
-          { label: "≥50% renewable", value: `${data.filter((c) => c.renewablePercent >= 50).length}`, sub: "countries" },
-        ].map((card) => (
-          <div key={card.label} className="rounded-xl bg-black/30 border border-white/10 p-4">
-            <p className="text-xs text-slate-500 mb-1">{card.label}</p>
-            <p className="text-white font-bold text-sm sm:text-base">{card.value}</p>
-            <p className="text-emerald-400 text-xs">{card.sub}</p>
+          { label: "GLOBAL AVG",   val: `${avg.toFixed(1)}%`,    color: "var(--hud-cyan)"  },
+          { label: "BEST",         val: best ? `${best.flag} ${best.country}` : "—", sub: best ? `${best.renewablePercent.toFixed(1)}%` : "", color: "var(--hud-green)" },
+          { label: "WORST",        val: worst ? `${worst.flag} ${worst.country}` : "—", sub: worst ? `${worst.renewablePercent.toFixed(1)}%` : "", color: "var(--hud-red)"   },
+          { label: "≥50% CLEAN",   val: `${over50}/${data.length}`, color: "var(--hud-amber)" },
+        ].map(s => (
+          <div key={s.label} className="px-3 py-2.5" style={{ background: "rgba(0,6,18,0.6)" }}>
+            <div className="font-mono text-[8px] tracking-widest mb-1" style={{ color: "rgba(0,229,255,0.35)" }}>
+              {s.label}
+            </div>
+            <div className="font-mono font-bold text-xs truncate" style={{ color: s.color }}>
+              {s.val}
+            </div>
+            {s.sub && <div className="font-mono text-[9px]" style={{ color: s.color }}>{s.sub}</div>}
           </div>
         ))}
       </div>
 
-      {/* Table header */}
-      <div className="rounded-t-xl bg-black/40 border border-white/10 border-b-0 px-4 py-3 grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-        <div className="col-span-1 text-center">#</div>
-        <button
-          className="col-span-4 text-left hover:text-slate-300 transition-colors flex items-center gap-1"
-          onClick={() => handleSort("country")}
-        >
-          Country {sort === "country" && (asc ? "↑" : "↓")}
-        </button>
-        <button
-          className="col-span-4 text-right hover:text-slate-300 transition-colors"
-          onClick={() => handleSort("renewablePercent")}
-        >
-          Renewable % {sort === "renewablePercent" && (asc ? "↑" : "↓")}
-        </button>
-        <div className="col-span-2 text-right hidden sm:block">Status</div>
-        <div className="col-span-1 text-right hidden sm:block">↕</div>
+      {/* ── Column header ───────────────────────────────────────────── */}
+      <div
+        className="grid grid-cols-12 gap-1 px-3 py-2 border-b font-mono text-[8px] tracking-widest uppercase sticky top-0"
+        style={{ borderColor: "rgba(0,229,255,0.08)", color: "rgba(0,229,255,0.35)", background: "rgba(0,6,18,0.95)", zIndex: 10 }}
+      >
+        <div className="col-span-1 text-center">RNK</div>
+        <div className="col-span-4">NATION</div>
+        <div className="col-span-5">
+          <button
+            className="hover:opacity-80 transition-opacity flex items-center gap-1"
+            onClick={() => { setSortAsc(s => !s); setPage(1); }}
+          >
+            RENEWABLE % {sortAsc ? "▲" : "▼"}
+          </button>
+        </div>
+        <div className="col-span-2 text-right hidden sm:block">STATUS</div>
       </div>
 
-      {/* Rows */}
-      <div className="rounded-b-xl border border-white/10 overflow-hidden divide-y divide-white/5">
-        {sorted.map((country, idx) => {
-          const rank = sort === "renewablePercent" && !asc ? idx + 1 : data.indexOf(country) + 1;
-          const isExpanded = expanded === country.code;
-          const hasBreakdown = country.breakdown && Object.keys(country.breakdown).length > 0;
+      {/* ── Rows ────────────────────────────────────────────────────── */}
+      {visible.map((c, i) => {
+        const rank    = (page - 1) * PAGE + i + 1;
+        const col     = getColor(c.renewablePercent);
+        const isOpen  = expanded === c.code;
+        const hasBD   = c.breakdown && Object.keys(c.breakdown).length > 0;
 
-          return (
-            <div key={country.code} className="bg-black/20 hover:bg-white/5 transition-colors">
-              <button
-                className="w-full px-4 py-3.5 grid grid-cols-12 gap-2 items-center text-left"
-                onClick={() => setExpanded(isExpanded ? null : country.code)}
+        return (
+          <div key={c.code}>
+            <button
+              className="hud-row w-full grid grid-cols-12 gap-1 px-3 py-2.5 text-left items-center"
+              onClick={() => setExpanded(isOpen ? null : c.code)}
+            >
+              <div className="col-span-1 flex justify-center">
+                <RankLabel n={rank} />
+              </div>
+
+              <div className="col-span-4 flex items-center gap-2 min-w-0">
+                <span className="text-base leading-none flex-shrink-0">{c.flag}</span>
+                <div className="min-w-0">
+                  <div className="font-mono font-bold text-[10px] truncate" style={{ color: "#c8ffe8" }}>
+                    {c.country.toUpperCase()}
+                  </div>
+                  <div className="font-mono text-[8px]" style={{ color: "rgba(0,229,255,0.3)" }}>
+                    {c.code}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-span-5 flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-xs tabular-nums" style={{ color: col }}>
+                    {c.renewablePercent.toFixed(1)}%
+                  </span>
+                </div>
+                <SegBar pct={c.renewablePercent} color={col} />
+              </div>
+
+              <div className="col-span-2 text-right hidden sm:flex sm:justify-end sm:items-center">
+                <SourceTag source={c.source} />
+              </div>
+            </button>
+
+            {/* Breakdown drawer */}
+            {isOpen && hasBD && (
+              <div
+                className="px-4 pb-3 pt-1 border-b"
+                style={{ borderColor: "rgba(0,229,255,0.08)", background: "rgba(0,20,10,0.6)" }}
               >
-                <div className="col-span-1 flex justify-center">
-                  <RankBadge rank={rank} />
+                <div className="font-mono text-[8px] tracking-widest mb-2" style={{ color: "rgba(0,229,255,0.4)" }}>
+                  ▸ ENERGY MIX BREAKDOWN
                 </div>
-
-                <div className="col-span-4 flex items-center gap-2.5">
-                  <span className="text-xl leading-none">{country.flag}</span>
-                  <div>
-                    <p className="text-white text-sm font-medium leading-tight">{country.country}</p>
-                    <p className="text-slate-500 text-xs">{country.code}</p>
-                  </div>
-                </div>
-
-                <div className="col-span-4">
-                  <div className="flex justify-end items-center gap-2 mb-1">
-                    <span className={`text-sm font-bold font-mono ${getScoreColor(country.renewablePercent)}`}>
-                      {country.renewablePercent.toFixed(1)}%
-                    </span>
-                  </div>
-                  <BarChart percent={country.renewablePercent} color={getBarColor(country.renewablePercent)} />
-                </div>
-
-                <div className="col-span-2 flex justify-end hidden sm:flex">
-                  <SourceBadge source={country.source} />
-                </div>
-
-                <div className="col-span-1 flex justify-end text-slate-600 text-xs">
-                  {isExpanded ? "▲" : "▼"}
-                </div>
-              </button>
-
-              {/* Breakdown panel */}
-              {isExpanded && hasBreakdown && (
-                <div className="px-4 pb-4 pt-1 bg-slate-900/50">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-                    {Object.entries(country.breakdown!).map(([src, val]) => (
-                      <div key={src} className="bg-black/30 rounded-lg p-2.5 text-center">
-                        <p className="text-slate-400 text-xs capitalize">{src}</p>
-                        <p className="text-white font-mono text-sm font-bold">{(val as number).toFixed(1)}%</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(c.breakdown!).map(([src, val]) => (
+                    <div
+                      key={src}
+                      className="px-2 py-1 border text-center"
+                      style={{ borderColor: "rgba(0,229,255,0.15)", minWidth: 60 }}
+                    >
+                      <div className="font-mono text-[8px] tracking-widest capitalize" style={{ color: "rgba(0,229,255,0.4)" }}>
+                        {src}
                       </div>
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2">
-                    Source: {country.source === "live" ? "Electricity Maps (real-time)" : country.source === "recent" ? "Energy-Charts.info / ENTSO-E" : "Our World in Data (annual avg)"}
-                    {country.source !== "annual" && ` · ${new Date(country.updatedAt).toLocaleString()}`}
-                  </p>
+                      <div className="font-mono font-bold text-xs" style={{ color: getColor(val as number) }}>
+                        {(val as number).toFixed(1)}%
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                <div className="font-mono text-[8px] mt-2" style={{ color: "rgba(0,229,255,0.25)" }}>
+                  SRC:{" "}
+                  {c.source === "live"   ? "ELECTRICITY MAPS (REAL-TIME)" :
+                   c.source === "recent" ? "ENERGY-CHARTS.INFO / ENTSO-E" :
+                                           "OUR WORLD IN DATA / IRENA (ANNUAL)"}
+                  {c.source !== "annual" && c.updatedAt !== "2023"
+                    ? `  ·  ${new Date(c.updatedAt).toLocaleTimeString()}`
+                    : "  ·  2022-2023 BASELINE"}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ── Pagination ──────────────────────────────────────────────── */}
+      {totalPages > 1 && (
+        <div
+          className="flex items-center justify-between px-4 py-3 border-t"
+          style={{ borderColor: "rgba(0,229,255,0.08)" }}
+        >
+          <button
+            disabled={page === 1}
+            onClick={() => setPage(p => p - 1)}
+            className="font-mono text-[9px] tracking-widest px-3 py-1 border transition-all disabled:opacity-30"
+            style={{ borderColor: "rgba(0,229,255,0.25)", color: "var(--hud-cyan)" }}
+          >
+            ◀ PREV
+          </button>
+          <span className="font-mono text-[9px] tracking-widest" style={{ color: "rgba(0,229,255,0.4)" }}>
+            PAGE {page} / {totalPages}  ·  {sorted.length} NATIONS
+          </span>
+          <button
+            disabled={page === totalPages}
+            onClick={() => setPage(p => p + 1)}
+            className="font-mono text-[9px] tracking-widest px-3 py-1 border transition-all disabled:opacity-30"
+            style={{ borderColor: "rgba(0,229,255,0.25)", color: "var(--hud-cyan)" }}
+          >
+            NEXT ▶
+          </button>
+        </div>
+      )}
     </div>
   );
 }

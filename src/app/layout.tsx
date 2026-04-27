@@ -13,12 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Climate Action Leaderboard 🌍",
+  title: "World Climate Action Leaderboard 🌍",
   description:
-    "World leaderboard for climate action — real-time renewable energy % and per capita carbon footprint rankings.",
+    "Real-time world leaderboard for climate action — renewable energy % and per capita carbon footprint for 170+ nations.",
   openGraph: {
-    title: "Climate Action Leaderboard 🌍",
-    description: "Real-time renewable energy and carbon footprint rankings for every country.",
+    title: "World Climate Action Leaderboard 🌍",
+    description: "Renewable energy and carbon footprint rankings for 170+ countries. Updated every 3 hours.",
     type: "website",
   },
 };
