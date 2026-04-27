@@ -19,12 +19,16 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [showInfo, setShowInfo] = useState(false);
 
+  // NEXT_PUBLIC_BASE_PATH is set to /climate-action-leaderboard in GitHub Actions;
+  // empty string locally — so the fetch always resolves correctly.
+  const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     setError(null);
     try {
-      const res = await fetch("/api/combined", { cache: "no-store" });
+      const res = await fetch(`${BASE}/data/combined.json`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load data");
       const json = await res.json();
       setRenewable(json.renewable || []);

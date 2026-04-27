@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "predev": "tsx scripts/generate-data.ts",
+    "generate-data": "tsx scripts/generate-data.ts",
+    "build": "tsx scripts/generate-data.ts && next build",
     "lint": "eslint"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

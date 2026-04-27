@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Generated at build time — not committed
+public/data/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
