@@ -40,11 +40,11 @@ jobs:
         run: npm ci
 
       - name: Generate static data
-        # Fetches live renewable + carbon data → writes public/data/combined.json
         run: npx tsx scripts/generate-data.ts
         env:
-          # Optional: add this secret in repo Settings → Secrets for live Electricity Maps data
           ELECTRICITY_MAPS_TOKEN: ${{ secrets.ELECTRICITY_MAPS_TOKEN }}
+          FIRMS_MAP_KEY:          ${{ secrets.FIRMS_MAP_KEY }}
+          OPENAQ_API_KEY:         ${{ secrets.OPENAQ_API_KEY }}
 
       - name: Build (static export)
         run: npx next build
