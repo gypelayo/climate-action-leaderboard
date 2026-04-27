@@ -1,4 +1,4 @@
-import { BASELINE_RENEWABLE, BASELINE_CARBON, BASELINE_CYCLING, getFlagEmoji } from "./data";
+import { BASELINE_RENEWABLE, BASELINE_CARBON, BASELINE_CYCLING, BASELINE_FOREST, getFlagEmoji } from "./data";
 import type { CountryRenewable, CountryCarbon } from "@/types";
 
 // Electricity Maps free API — zone-level real-time power breakdown
@@ -231,95 +231,49 @@ export async function getCyclingLeaderboard(): Promise<import("@/types").Country
 }
 
 export async function getForestLeaderboard(): Promise<import("@/types").CountryForest[]> {
-  // ── Step 1: build a full ISO-2 → country name map from the World Bank
-  // Countries API. This covers 217 entries and lets us surface ALL 200+
-  // countries that have forest data without maintaining a separate name list.
-  const nameMap = new Map<string, string>();
+  // ── Guaranteed baseline: 209 countries, World Bank/FAO 2023 data ────────
+  // Baked in statically so the leaderboard always has data even if the API
+  // is rate-limited or unavailable during the build.
+  const baseline = new Map(
+    Object.entries(BASELINE_FOREST).map(([code, info]) => [
+      code,
+      { name: info.name, pct: info.forestPercent, km2: 0, year: info.year },
+    ])
+  );
+
+  // ── Try live WB API for updated % and km² values ────────────────────────
+  // Uses a single sequential call with a long timeout. If it fails, the
+  // guaranteed baseline above is used. km2 stays 0 for countries where the
+  // API call doesn't succeed — the UI shows "—" for those.
   try {
     const res = await fetch(
-      "https://api.worldbank.org/v2/country/all?format=json&per_page=500",
-      { signal: AbortSignal.timeout(15_000) } as RequestInit
+      "https://api.worldbank.org/v2/country/all/indicator/AG.LND.FRST.K2" +
+      "?format=json&mrv=1&per_page=500",
+      { signal: AbortSignal.timeout(25_000) } as RequestInit
     );
     if (res.ok) {
       const json = await res.json();
-      for (const c of json[1] ?? []) {
-        const iso2: string = c.iso2Code?.trim() ?? "";
-        if (iso2.length === 2 && c.name) {
-          nameMap.set(iso2, c.name as string);
+      for (const entry of json[1] ?? []) {
+        const code: string = entry.country?.id ?? "";
+        if (code.length !== 2 || !/^[A-Z]{2}$/.test(code)) continue;
+        if (entry.value === null || entry.value === undefined) continue;
+        const existing = baseline.get(code);
+        if (existing) {
+          existing.km2 = Math.round(entry.value);
         }
       }
     }
-  } catch { /* silently continue — will fall back to our baseline maps */ }
+  } catch { /* keep km2=0 */ }
 
-  // Supplement with our own names (handle territories / short names WB might differ on)
-  for (const [code, info] of [
-    ...Object.entries(BASELINE_RENEWABLE),
-    ...Object.entries(BASELINE_CARBON),
-    ...Object.entries(BASELINE_CYCLING),
-  ] as [string, { name: string }][]) {
-    if (!nameMap.has(code)) nameMap.set(code, info.name);
-  }
-
-  // ── Step 2: fetch forest % and km² from World Bank / FAO ────────────────
-  const pctMap = new Map<string, { val: number; year: number }>();
-  const km2Map = new Map<string, { val: number; year: number }>();
-  const BASE_WB = "https://api.worldbank.org/v2/country/all/indicator";
-  const PARAMS  = "?format=json&mrv=3&per_page=500";
-
-  async function fetchWB(indicator: string, target: Map<string, { val: number; year: number }>) {
-    try {
-      const res = await fetch(`${BASE_WB}/${indicator}${PARAMS}`, {
-        signal: AbortSignal.timeout(25_000),
-      } as RequestInit);
-      if (!res.ok) return;
-      const json = await res.json();
-      for (const entry of json[1] ?? []) {
-        const iso2: string = entry.country?.id ?? "";
-        if (iso2.length !== 2 || !/^[A-Z]{2}$/.test(iso2)) continue;
-        if (entry.value === null || entry.value === undefined) continue;
-        const year = parseInt(entry.date, 10);
-        const existing = target.get(iso2);
-        if (!existing || year > existing.year) {
-          target.set(iso2, { val: Math.round(entry.value * 100) / 100, year });
-        }
-      }
-    } catch { /* silent fallback */ }
-  }
-
-  await Promise.all([
-    fetchWB("AG.LND.FRST.ZS", pctMap),
-    fetchWB("AG.LND.FRST.K2", km2Map),
-  ]);
-
-  // ── Step 3: join the two indicators, skip entries missing either ─────────
-  const results: import("@/types").CountryForest[] = [];
-  const codes = new Set([...pctMap.keys(), ...km2Map.keys()]);
-
-  // WB aggregate region codes to skip (not real countries)
-  const SKIP = new Set(["1A","1W","4E","7E","8S","B8","EU","F1","S1","S2","S3","S4",
-    "T2","T3","T4","T5","T6","T7","V1","V2","V3","V4","XC","XD","XE","XF","XG",
-    "XH","XI","XJ","XL","XM","XN","XO","XP","XQ","XT","XU","XY","ZB","ZF","ZG",
-    "ZH","ZI","ZJ","ZQ","ZT","OE","S7","IBT","IBD","IDB","IDX","EMU","EAR",
-    "EAP","ECA","LAC","MNA","NAC","SAR","SSA","TSS","TSA","UMC","LMC","LIC","MIC","HIC"]);
-
-  for (const code of codes) {
-    if (SKIP.has(code)) continue;
-    const pct = pctMap.get(code);
-    const km2 = km2Map.get(code);
-    if (!pct || !km2) continue;
-    const name = nameMap.get(code);
-    if (!name) continue;
-
-    results.push({
-      country:       name,
+  return Array.from(baseline.entries())
+    .map(([code, d]) => ({
+      country:       d.name,
       code,
       flag:          getFlagEmoji(code),
-      forestPercent: pct.val,
-      forestKm2:     km2.val,
+      forestPercent: d.pct,
+      forestKm2:     d.km2,
       source:        "World Bank / FAO Global Forest Resources Assessment (2023)",
-      year:          Math.max(pct.year, km2.year),
-    });
-  }
-
-  return results.sort((a, b) => b.forestPercent - a.forestPercent);
+      year:          d.year,
+    }))
+    .sort((a, b) => b.forestPercent - a.forestPercent);
 }

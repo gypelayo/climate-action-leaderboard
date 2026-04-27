@@ -27,6 +27,7 @@ function getColor(pct: number) {
 }
 
 function fmt(km2: number): string {
+  if (!km2) return "—";
   if (km2 >= 1_000_000) return `${(km2 / 1_000_000).toFixed(2)}M km²`;
   if (km2 >= 1_000)     return `${(km2 / 1_000).toFixed(1)}k km²`;
   return `${km2.toFixed(0)} km²`;
