@@ -165,19 +165,54 @@ export async function getRenewableLeaderboard(): Promise<CountryRenewable[]> {
 }
 
 export async function getCarbonLeaderboard(): Promise<CountryCarbon[]> {
+  // ── World Bank API: EN.GHG.CO2.PC.CE.AR5 (t CO₂e per capita, excl. LULUCF) ────
+  // Free, no key. Returns 2023–2024 data for most countries — far more current
+  // than any static baseline. The old EN.ATM.CO2E.PC indicator was archived;
+  // this replacement is the officially maintained series.
+  const wbMap = new Map<string, { co2: number; year: number }>();
+  try {
+    const url =
+      "https://api.worldbank.org/v2/country/all/indicator/EN.GHG.CO2.PC.CE.AR5" +
+      "?format=json&mrv=2&per_page=400";
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(12_000),
+    } as RequestInit);
+    if (res.ok) {
+      const json = await res.json();
+      const entries: any[] = json[1] ?? [];
+      for (const entry of entries) {
+        const iso2: string | undefined = entry.country?.id;
+        if (!iso2 || entry.value === null || entry.value === undefined) continue;
+        // Skip World Bank aggregate regions (single-char or numeric prefixes)
+        if (iso2.length !== 2 || !/^[A-Z]{2}$/.test(iso2)) continue;
+        const year = parseInt(entry.date, 10);
+        const existing = wbMap.get(iso2);
+        if (!existing || year > existing.year) {
+          wbMap.set(iso2, { co2: Math.round(entry.value * 100) / 100, year });
+        }
+      }
+    }
+  } catch {
+    // Silently fall back to GCP baseline on any network error
+  }
+
   const results: CountryCarbon[] = [];
 
   for (const [code, info] of Object.entries(BASELINE_CARBON)) {
+    const wb = wbMap.get(code);
+    // Use World Bank data only if it's at least as recent as our baseline
+    const useWB = wb && wb.year >= info.year;
     results.push({
       country: info.name,
       code,
       flag: getFlagEmoji(code),
-      co2PerCapita: info.co2PerCapita,
-      year: info.year,
-      source: "Global Carbon Project / Our World in Data",
+      co2PerCapita: useWB ? wb!.co2  : info.co2PerCapita,
+      year:         useWB ? wb!.year : info.year,
+      source: useWB
+        ? `World Bank (${wb!.year})`
+        : `Global Carbon Project / Our World in Data (${info.year})`,
     });
   }
 
-  // Sort ascending (lowest footprint first = best performers)
   return results.sort((a, b) => a.co2PerCapita - b.co2PerCapita);
 }

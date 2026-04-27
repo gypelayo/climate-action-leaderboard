@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { CountryRenewable, CountryCarbon } from "@/types";
 import RenewableLeaderboard from "@/components/RenewableLeaderboard";
 import CarbonLeaderboard    from "@/components/CarbonLeaderboard";
@@ -8,33 +8,32 @@ import StarField            from "@/components/StarField";
 import Globe                from "@/components/Globe";
 import { RefreshCw }        from "lucide-react";
 
-function useMissionClock() {
-  const [time, setTime] = useState("");
+function useClock() {
+  const [t, setT] = useState("");
   useEffect(() => {
-    const tick = () =>
-      setTime(new Date().toUTCString().slice(17, 25) + " UTC");
+    const tick = () => setT(new Date().toUTCString().slice(17, 25));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
-  return time;
+  return t;
 }
 
 type Tab = "renewable" | "carbon";
 
 export default function Dashboard() {
-  const [renewable, setRenewable] = useState<CountryRenewable[]>([]);
-  const [carbon,    setCarbon]    = useState<CountryCarbon[]>([]);
+  const [renewable,   setRenewable]   = useState<CountryRenewable[]>([]);
+  const [carbon,      setCarbon]      = useState<CountryCarbon[]>([]);
   const [lastFetched, setLastFetched] = useState("");
-  const [loading,   setLoading]   = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error,     setError]     = useState<string | null>(null);
-  const [tab,       setTab]       = useState<Tab>("renewable");
+  const [loading,     setLoading]     = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+  const [tab,         setTab]         = useState<Tab>("renewable");
   const [renewSearch, setRenewSearch] = useState("");
   const [carbSearch,  setCarbSearch]  = useState("");
-  const clock = useMissionClock();
+  const clock = useClock();
 
-  const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+  const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
   const fetchData = useCallback(async (silent = false) => {
     silent ? setRefreshing(true) : setLoading(true);
@@ -62,9 +61,7 @@ export default function Dashboard() {
 
   const liveCount   = renewable.filter(c => c.source === "live").length;
   const recentCount = renewable.filter(c => c.source === "recent").length;
-  const totalCountries = Math.max(renewable.length, carbon.length);
-
-  const freshLabel = lastFetched
+  const freshLabel  = lastFetched
     ? new Date(lastFetched).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "—";
 
@@ -78,186 +75,181 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={{ zIndex: 3 }}>
+    <div className="relative min-h-screen" style={{ zIndex: 3 }}>
       <StarField />
 
-      {/* Everything above the starfield */}
       <div className="relative" style={{ zIndex: 4 }}>
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <header
-          className="sticky top-0 border-b px-4 py-3"
+          className="sticky top-0 border-b"
           style={{
             zIndex: 50,
-            borderColor: "var(--hud-border)",
-            background: "rgba(0,6,18,0.85)",
-            backdropFilter: "blur(14px)",
+            borderColor: "rgba(120,200,255,0.1)",
+            background: "rgba(0, 5, 18, 0.88)",
+            backdropFilter: "blur(20px)",
           }}
         >
-          <div className="max-w-[1600px] mx-auto flex items-center gap-4 flex-wrap">
+          <div className="max-w-[1600px] mx-auto px-5 py-3 flex items-center gap-5">
             <Globe />
 
-            {/* Title block */}
             <div className="flex-1 min-w-0">
-              <div
-                className="text-[10px] font-mono tracking-[0.3em] uppercase mb-0.5"
-                style={{ color: "rgba(0,229,255,0.5)" }}
-              >
-                ◈ ORBITAL CLIMATE MONITOR · EARTH
-              </div>
-              <h1
-                className="text-base sm:text-xl font-bold tracking-widest uppercase leading-tight glow-cyan"
-                style={{ color: "var(--hud-cyan)", fontFamily: "var(--font-mono)" }}
-              >
-                WORLD CLIMATE ACTION LEADERBOARD
+              <h1 className="text-lg sm:text-2xl font-bold leading-tight title-gradient">
+                Climate Action Leaderboard
               </h1>
-              <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
-                <StatusPill color="green" label={`${totalCountries} NATIONS TRACKED`} />
-                {liveCount > 0 && <StatusPill color="green" blink label={`${liveCount} LIVE`} />}
-                {recentCount > 0 && <StatusPill color="amber" label={`${recentCount} NEAR-REAL-TIME`} />}
-                <StatusPill color="cyan" label={`DATA: ${freshLabel}`} />
+              <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                World sustainability rankings ·{" "}
+                <span style={{ color: "var(--glow-cyan)" }}>{Math.max(renewable.length, carbon.length)} nations</span>
+              </p>
+            </div>
+
+            {/* Status badges */}
+            <div className="hidden md:flex items-center gap-2">
+              {liveCount > 0 && <Pill color="green" dot blink label={`${liveCount} live`} />}
+              {recentCount > 0 && <Pill color="amber" dot label={`${recentCount} near real-time`} />}
+              {lastFetched && <Pill color="cyan" label={`Updated ${freshLabel}`} />}
+            </div>
+
+            {/* Clock */}
+            <div className="hidden lg:block text-right">
+              <div className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>UTC</div>
+              <div className="text-sm font-mono font-semibold glow-cyan" style={{ color: "var(--glow-cyan)" }}>
+                {clock}
               </div>
             </div>
 
-            {/* Right: clock + refresh */}
-            <div className="flex items-center gap-3 ml-auto">
-              <div className="text-right hidden sm:block">
-                <div className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(0,229,255,0.4)" }}>
-                  MISSION CLOCK
-                </div>
-                <div
-                  className="text-sm font-mono font-bold animate-data-flicker glow-cyan"
-                  style={{ color: "var(--hud-cyan)" }}
-                >
-                  {clock}
-                </div>
-              </div>
-              <button
-                onClick={() => fetchData(true)}
-                disabled={refreshing || loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold tracking-widest uppercase transition-all disabled:opacity-40"
-                style={{
-                  border: "1px solid rgba(0,229,255,0.3)",
-                  color: "var(--hud-cyan)",
-                  background: "rgba(0,229,255,0.05)",
-                }}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline">REFRESH</span>
-              </button>
-            </div>
+            <button
+              onClick={() => fetchData(true)}
+              disabled={refreshing || loading}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-40"
+              style={{
+                border: "1px solid rgba(34,211,238,0.25)",
+                color: "var(--glow-cyan)",
+                background: "rgba(34,211,238,0.07)",
+              }}
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
           </div>
         </header>
 
-        {/* ── Content ────────────────────────────────────────────────────── */}
-        <main className="max-w-[1600px] mx-auto p-4">
+        {/* ── Main ────────────────────────────────────────────────────────── */}
+        <main className="max-w-[1600px] mx-auto px-4 py-5">
 
-          {/* Loading state */}
+          {/* Loading */}
           {loading && (
-            <div className="flex flex-col items-center justify-center py-40 gap-5">
+            <div className="flex flex-col items-center justify-center py-48 gap-5">
               <div
-                className="w-14 h-14 rounded-full border-2 border-t-transparent animate-spin"
-                style={{ borderColor: "var(--hud-cyan)", borderTopColor: "transparent" }}
+                className="w-12 h-12 rounded-full border-2 border-t-transparent animate-spin"
+                style={{ borderColor: "rgba(34,211,238,0.4)", borderTopColor: "transparent" }}
               />
-              <p className="font-mono text-xs tracking-widest uppercase" style={{ color: "rgba(0,229,255,0.5)" }}>
-                ACQUIRING TELEMETRY…
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                Loading climate data…
               </p>
             </div>
           )}
 
           {error && !loading && (
             <div
-              className="text-center p-6 font-mono text-sm border rounded"
-              style={{ borderColor: "rgba(255,59,59,0.3)", color: "var(--hud-red)", background: "rgba(255,0,0,0.05)" }}
+              className="text-center p-6 text-sm rounded-xl border"
+              style={{
+                borderColor: "rgba(248,113,113,0.25)",
+                color: "var(--glow-red)",
+                background: "rgba(248,113,113,0.05)",
+              }}
             >
-              ⚠ SIGNAL ERROR: {error} —{" "}
-              <button onClick={() => fetchData()} className="underline hover:opacity-70">RETRY</button>
+              ⚠ {error} —{" "}
+              <button onClick={() => fetchData()} className="underline opacity-70 hover:opacity-100">
+                retry
+              </button>
             </div>
           )}
 
           {!loading && !error && (
             <>
-              {/* Mobile tabs */}
-              <div className="flex lg:hidden gap-2 mb-4">
+              {/* Mobile tab bar */}
+              <div
+                className="flex lg:hidden gap-1 p-1 rounded-xl mb-4"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+              >
                 {(["renewable", "carbon"] as Tab[]).map(t => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
-                    className="flex-1 py-2 text-xs font-mono font-bold tracking-widest uppercase transition-all"
-                    style={{
-                      border: "1px solid",
-                      borderColor: tab === t ? "var(--hud-cyan)" : "rgba(0,229,255,0.2)",
-                      color:       tab === t ? "var(--hud-cyan)" : "rgba(0,229,255,0.4)",
-                      background:  tab === t ? "rgba(0,229,255,0.08)" : "transparent",
-                    }}
+                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                    style={tab === t
+                      ? { background: "rgba(34,211,238,0.15)", color: "var(--glow-cyan)" }
+                      : { color: "var(--text-muted)" }
+                    }
                   >
-                    {t === "renewable" ? "⚡ RENEWABLE" : "🌿 CARBON"}
+                    {t === "renewable" ? "⚡ Renewable" : "🌿 Carbon"}
                   </button>
                 ))}
               </div>
 
-              {/* Desktop: two panels side-by-side / Mobile: single tab */}
+              {/* Two-column layout */}
               <div className="flex flex-col lg:flex-row gap-4">
 
-                {/* Renewable panel */}
-                <div className={`flex-1 min-w-0 ${tab === "carbon" ? "hidden lg:flex lg:flex-col" : "flex flex-col"}`}>
+                {/* ── Renewable panel ──────────────────────────────────── */}
+                <section
+                  className={`flex-1 min-w-0 flex flex-col glass glass-accent relative animate-fade-in ${
+                    tab === "carbon" ? "hidden lg:flex" : "flex"
+                  }`}
+                >
                   <PanelHeader
-                    title="⚡ RENEWABLE ENERGY"
-                    subtitle="% of electricity from clean sources"
+                    icon="⚡"
+                    title="Renewable Energy"
+                    subtitle="Share of electricity from clean sources"
+                    count={filteredR.length}
                     search={renewSearch}
                     onSearch={setRenewSearch}
-                    count={filteredR.length}
                   />
-                  <div
-                    className="hud-panel flex-1 overflow-y-auto animate-slide-in"
-                    style={{ maxHeight: "calc(100vh - 220px)" }}
-                  >
-                    <span className="hud-corner-bl" /><span className="hud-corner-br" />
+                  <div className="flex-1 overflow-y-auto" style={{ maxHeight: "calc(100vh - 210px)" }}>
                     <RenewableLeaderboard data={filteredR} />
                   </div>
-                </div>
+                </section>
 
-                {/* Divider (desktop only) */}
+                {/* Vertical divider */}
                 <div
-                  className="hidden lg:block w-px flex-shrink-0 self-stretch"
-                  style={{ background: "linear-gradient(to bottom, transparent, var(--hud-border), transparent)" }}
+                  className="hidden lg:block w-px self-stretch flex-shrink-0"
+                  style={{ background: "linear-gradient(to bottom, transparent, rgba(120,200,255,0.12), transparent)" }}
                 />
 
-                {/* Carbon panel */}
-                <div className={`flex-1 min-w-0 ${tab === "renewable" ? "hidden lg:flex lg:flex-col" : "flex flex-col"}`}>
+                {/* ── Carbon panel ─────────────────────────────────────── */}
+                <section
+                  className={`flex-1 min-w-0 flex flex-col glass glass-accent relative animate-fade-in ${
+                    tab === "renewable" ? "hidden lg:flex" : "flex"
+                  }`}
+                >
                   <PanelHeader
-                    title="🌿 CARBON FOOTPRINT"
-                    subtitle="tonnes CO₂ per capita per year"
+                    icon="🌿"
+                    title="Carbon Footprint"
+                    subtitle="Tonnes CO₂ per capita per year"
+                    count={filteredC.length}
                     search={carbSearch}
                     onSearch={setCarbSearch}
-                    count={filteredC.length}
                   />
-                  <div
-                    className="hud-panel flex-1 overflow-y-auto animate-slide-in"
-                    style={{ maxHeight: "calc(100vh - 220px)" }}
-                  >
-                    <span className="hud-corner-bl" /><span className="hud-corner-br" />
+                  <div className="flex-1 overflow-y-auto" style={{ maxHeight: "calc(100vh - 210px)" }}>
                     <CarbonLeaderboard data={filteredC} />
                   </div>
-                </div>
-
+                </section>
               </div>
             </>
           )}
         </main>
 
-        {/* ── Footer ─────────────────────────────────────────────────────── */}
         <footer
-          className="text-center font-mono text-[9px] tracking-widest py-6 border-t"
-          style={{ borderColor: "var(--hud-border)", color: "rgba(0,229,255,0.25)" }}
+          className="text-center text-xs py-6 border-t"
+          style={{ borderColor: "rgba(255,255,255,0.05)", color: "var(--text-muted)" }}
         >
-          DATA SOURCES: ELECTRICITY MAPS · ENERGY-CHARTS.INFO (FRAUNHOFER ISE / ENTSO-E) · GLOBAL CARBON PROJECT · OUR WORLD IN DATA
+          Data: Electricity Maps · Energy-Charts.info (Fraunhofer ISE / ENTSO-E) · World Bank · Global Carbon Project · Our World in Data
           <br />
           <a
             href="https://github.com/gypelayo/climate-action-leaderboard"
-            className="hover:opacity-60 transition-opacity"
+            className="hover:opacity-60 transition-opacity mt-1 inline-block"
           >
-            GITHUB.COM/GYPELAYO/CLIMATE-ACTION-LEADERBOARD
+            github.com/gypelayo/climate-action-leaderboard
           </a>
         </footer>
       </div>
@@ -265,61 +257,66 @@ export default function Dashboard() {
   );
 }
 
-/* ─── Sub-components ────────────────────────────────────────────────────────── */
+/* ── Shared sub-components ─────────────────────────────────────────────────── */
 
-function StatusPill({
-  color, label, blink,
-}: { color: "green" | "amber" | "cyan" | "red"; label: string; blink?: boolean }) {
-  const colors = {
-    green: { dot: "#00ff88", text: "rgba(0,255,136,0.7)" },
-    cyan:  { dot: "#00e5ff", text: "rgba(0,229,255,0.6)" },
-    amber: { dot: "#ffaa00", text: "rgba(255,170,0,0.7)" },
-    red:   { dot: "#ff3b3b", text: "rgba(255,59,59,0.8)" },
+function Pill({
+  color, label, dot, blink,
+}: { color: "green"|"cyan"|"amber"|"red"; label: string; dot?: boolean; blink?: boolean }) {
+  const cols = {
+    green: { bg: "rgba(52,211,153,0.1)",  border: "rgba(52,211,153,0.25)",  text: "#34d399" },
+    cyan:  { bg: "rgba(34,211,238,0.1)",  border: "rgba(34,211,238,0.25)",  text: "#22d3ee" },
+    amber: { bg: "rgba(251,146,60,0.1)",  border: "rgba(251,146,60,0.25)",  text: "#fb923c" },
+    red:   { bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)", text: "#f87171" },
   }[color];
   return (
-    <span className="flex items-center gap-1" style={{ color: colors.text }}>
-      <span
-        className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${blink ? "animate-blink" : "animate-pulse-dot"}`}
-        style={{ background: colors.dot, color: colors.dot }}
-      />
-      <span className="text-[9px] font-mono tracking-widest uppercase">{label}</span>
+    <span
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+      style={{ background: cols.bg, border: `1px solid ${cols.border}`, color: cols.text }}
+    >
+      {dot && (
+        <span
+          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${blink ? "animate-blink" : "animate-pulse-dot"}`}
+          style={{ background: cols.text, color: cols.text }}
+        />
+      )}
+      {label}
     </span>
   );
 }
 
 function PanelHeader({
-  title, subtitle, search, onSearch, count,
+  icon, title, subtitle, count, search, onSearch,
 }: {
-  title: string; subtitle: string;
-  search: string; onSearch: (v: string) => void;
-  count: number;
+  icon: string; title: string; subtitle: string;
+  count: number; search: string; onSearch: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-      <div>
-        <div
-          className="text-xs font-mono font-bold tracking-widest uppercase glow-cyan"
-          style={{ color: "var(--hud-cyan)" }}
-        >
-          {title}
-        </div>
-        <div className="text-[9px] font-mono tracking-widest" style={{ color: "rgba(0,229,255,0.35)" }}>
-          {subtitle} · {count} nations
+    <div
+      className="flex items-center justify-between gap-3 px-5 py-4 border-b flex-wrap gap-y-2"
+      style={{ borderColor: "rgba(255,255,255,0.06)" }}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="text-xl">{icon}</span>
+        <div>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{title}</h2>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {subtitle} · <span style={{ color: "var(--text-secondary)" }}>{count} nations</span>
+          </p>
         </div>
       </div>
       <input
         type="text"
-        placeholder="SEARCH…"
+        placeholder="Search country…"
         value={search}
         onChange={e => onSearch(e.target.value)}
-        className="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-transparent outline-none w-40 transition-all"
+        className="px-3 py-1.5 text-sm rounded-lg outline-none transition-all w-44"
         style={{
-          border: "1px solid rgba(0,229,255,0.2)",
-          color: "var(--hud-cyan)",
-          caretColor: "var(--hud-cyan)",
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          color: "var(--text-primary)",
         }}
-        onFocus={e => (e.target.style.borderColor = "rgba(0,229,255,0.6)")}
-        onBlur={e  => (e.target.style.borderColor = "rgba(0,229,255,0.2)")}
+        onFocus={e  => (e.target.style.borderColor = "rgba(34,211,238,0.4)")}
+        onBlur={e   => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
       />
     </div>
   );
