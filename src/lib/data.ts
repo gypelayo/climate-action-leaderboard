@@ -559,3 +559,65 @@ export const BASELINE_CYCLING: Record<string, { name: string; modalShare: number
   FJ: { name: "Fiji",           modalShare:  4.0, year: 2021 },
   PG: { name: "Papua New Guinea",modalShare: 5.0, year: 2021 },
 };
+
+// ── Cycling additions: countries present in renewable/carbon but not yet in cycling
+// Estimates based on transport surveys, World Bank mobility data, and regional patterns
+Object.assign(BASELINE_CYCLING, {
+  // ── Middle East ─────────────────────────────────────────────────────────
+  TM: { name: "Turkmenistan",    modalShare:  2.0, year: 2021 },
+  LB: { name: "Lebanon",         modalShare:  2.0, year: 2022 },
+  SY: { name: "Syria",           modalShare:  3.0, year: 2021 },
+  KW: { name: "Kuwait",          modalShare:  0.5, year: 2022 },
+  OM: { name: "Oman",            modalShare:  0.5, year: 2022 },
+  YE: { name: "Yemen",           modalShare:  4.0, year: 2021 },  // necessity cycling
+
+  // ── South Asia ──────────────────────────────────────────────────────────
+  BT: { name: "Bhutan",          modalShare:  6.0, year: 2021 },
+  MV: { name: "Maldives",        modalShare:  3.0, year: 2021 },
+
+  // ── Caribbean / Americas ────────────────────────────────────────────────
+  BB: { name: "Barbados",        modalShare:  3.0, year: 2021 },
+  BS: { name: "Bahamas",         modalShare:  2.0, year: 2021 },
+  BZ: { name: "Belize",          modalShare:  5.0, year: 2021 },
+  SR: { name: "Suriname",        modalShare:  6.0, year: 2022 },  // flat terrain, cycling culture
+  GY: { name: "Guyana",          modalShare:  4.0, year: 2021 },
+
+  // ── North Africa ────────────────────────────────────────────────────────
+  LY: { name: "Libya",           modalShare:  1.5, year: 2021 },
+  SS: { name: "South Sudan",     modalShare:  6.0, year: 2021 },
+  NE: { name: "Niger",           modalShare:  6.0, year: 2021 },
+  MR: { name: "Mauritania",      modalShare:  4.0, year: 2021 },
+
+  // ── West Africa ─────────────────────────────────────────────────────────
+  GM: { name: "Gambia",          modalShare:  8.0, year: 2021 },
+  GN: { name: "Guinea",          modalShare:  6.0, year: 2021 },
+  GW: { name: "Guinea-Bissau",   modalShare:  7.0, year: 2021 },
+  SL: { name: "Sierra Leone",    modalShare:  6.0, year: 2021 },
+  LR: { name: "Liberia",         modalShare:  5.0, year: 2021 },
+  CI: { name: "Côte d'Ivoire",   modalShare:  4.0, year: 2022 },
+  TG: { name: "Togo",            modalShare:  5.0, year: 2021 },
+  BJ: { name: "Benin",           modalShare:  5.0, year: 2021 },
+
+  // ── Central Africa ──────────────────────────────────────────────────────
+  CM: { name: "Cameroon",        modalShare:  5.0, year: 2021 },
+  CF: { name: "Central Afr. Rep.",modalShare: 5.0, year: 2021 },
+  CG: { name: "Rep. of Congo",   modalShare:  4.0, year: 2021 },
+  CD: { name: "DR Congo",        modalShare:  6.0, year: 2021 },
+  GA: { name: "Gabon",           modalShare:  3.0, year: 2021 },
+  GQ: { name: "Eq. Guinea",      modalShare:  3.0, year: 2021 },
+
+  // ── East Africa ─────────────────────────────────────────────────────────
+  DJ: { name: "Djibouti",        modalShare:  4.0, year: 2021 },
+  ER: { name: "Eritrea",         modalShare:  7.0, year: 2021 },
+  SO: { name: "Somalia",         modalShare:  5.0, year: 2021 },
+
+  // ── Southern Africa ─────────────────────────────────────────────────────
+  SZ: { name: "Eswatini",        modalShare:  4.0, year: 2021 },
+  LS: { name: "Lesotho",         modalShare:  5.0, year: 2021 },
+
+  // ── Indian Ocean islands ────────────────────────────────────────────────
+  MU: { name: "Mauritius",       modalShare:  4.0, year: 2022 },
+  KM: { name: "Comoros",         modalShare:  5.0, year: 2021 },
+  CV: { name: "Cape Verde",      modalShare:  6.0, year: 2022 },  // flat islands, active cycling
+  ST: { name: "São Tomé & Pr.",  modalShare:  5.0, year: 2021 },
+} as typeof BASELINE_CYCLING);
