@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { CountryRenewable, CountryCarbon } from "@/types";
+import type { CountryRenewable, CountryCarbon, CountryCycling, CountryForest } from "@/types";
 import RenewableLeaderboard from "@/components/RenewableLeaderboard";
 import CarbonLeaderboard    from "@/components/CarbonLeaderboard";
+import CyclingLeaderboard   from "@/components/CyclingLeaderboard";
+import ForestLeaderboard    from "@/components/ForestLeaderboard";
 import StarField            from "@/components/StarField";
 import Globe                from "@/components/Globe";
 import { RefreshCw }        from "lucide-react";
@@ -19,21 +21,32 @@ function useClock() {
   return t;
 }
 
-type Tab = "renewable" | "carbon";
+type TabId = "renewable" | "carbon" | "cycling" | "forest";
+
+const TABS: { id: TabId; icon: string; label: string; sub: string }[] = [
+  { id: "renewable", icon: "⚡", label: "Renewable Energy",  sub: "% electricity from clean sources" },
+  { id: "carbon",    icon: "🌿", label: "Carbon Footprint",  sub: "t CO₂ per capita / year"          },
+  { id: "cycling",   icon: "🚴", label: "Cycling",           sub: "% of daily trips by bike"         },
+  { id: "forest",    icon: "🌳", label: "Forest Cover",      sub: "% of land area / km²"             },
+];
 
 export default function Dashboard() {
   const [renewable,   setRenewable]   = useState<CountryRenewable[]>([]);
   const [carbon,      setCarbon]      = useState<CountryCarbon[]>([]);
+  const [cycling,     setCycling]     = useState<CountryCycling[]>([]);
+  const [forest,      setForest]      = useState<CountryForest[]>([]);
   const [lastFetched, setLastFetched] = useState("");
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
   const [error,       setError]       = useState<string | null>(null);
-  const [tab,         setTab]         = useState<Tab>("renewable");
-  const [renewSearch, setRenewSearch] = useState("");
-  const [carbSearch,  setCarbSearch]  = useState("");
-  const clock = useClock();
+  const [tab,         setTab]         = useState<TabId>("renewable");
+  const [search,      setSearch]      = useState("");
 
-  const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const clock = useClock();
+  const BASE  = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+  // Reset search when switching tabs
+  const handleTab = (t: TabId) => { setTab(t); setSearch(""); };
 
   const fetchData = useCallback(async (silent = false) => {
     silent ? setRefreshing(true) : setLoading(true);
@@ -43,7 +56,9 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const j = await res.json();
       setRenewable(j.renewable ?? []);
-      setCarbon(j.carbon ?? []);
+      setCarbon(j.carbon     ?? []);
+      setCycling(j.cycling   ?? []);
+      setForest(j.forest     ?? []);
       setLastFetched(j.lastFetched ?? "");
     } catch (e: any) {
       setError(e.message ?? "Unknown error");
@@ -65,14 +80,13 @@ export default function Dashboard() {
     ? new Date(lastFetched).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "—";
 
-  const filteredR = renewable.filter(c =>
-    c.country.toLowerCase().includes(renewSearch.toLowerCase()) ||
-    c.code.toLowerCase().includes(renewSearch.toLowerCase())
-  );
-  const filteredC = carbon.filter(c =>
-    c.country.toLowerCase().includes(carbSearch.toLowerCase()) ||
-    c.code.toLowerCase().includes(carbSearch.toLowerCase())
-  );
+  const activeTab = TABS.find(t => t.id === tab)!;
+
+  function filter<T extends { country: string; code: string }>(arr: T[]): T[] {
+    if (!search.trim()) return arr;
+    const q = search.toLowerCase();
+    return arr.filter(c => c.country.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
+  }
 
   return (
     <div className="relative min-h-screen" style={{ zIndex: 3 }}>
@@ -86,32 +100,34 @@ export default function Dashboard() {
           style={{
             zIndex: 50,
             borderColor: "rgba(120,200,255,0.1)",
-            background: "rgba(0, 5, 18, 0.88)",
+            background: "rgba(0,5,18,0.9)",
             backdropFilter: "blur(20px)",
           }}
         >
-          <div className="max-w-[1600px] mx-auto px-5 py-3 flex items-center gap-5">
+          <div className="max-w-5xl mx-auto px-5 py-3 flex items-center gap-4">
             <Globe />
 
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-2xl font-bold leading-tight title-gradient">
+              <h1 className="text-lg sm:text-xl font-bold leading-tight title-gradient">
                 Climate Action Leaderboard
               </h1>
-              <p className="text-xs sm:text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-xs mt-0.5 hidden sm:block" style={{ color: "var(--text-secondary)" }}>
                 World sustainability rankings ·{" "}
-                <span style={{ color: "var(--glow-cyan)" }}>{Math.max(renewable.length, carbon.length)} nations</span>
+                <span style={{ color: "var(--glow-cyan)" }}>
+                  {Math.max(renewable.length, carbon.length)} nations
+                </span>
               </p>
             </div>
 
-            {/* Status badges */}
-            <div className="hidden md:flex items-center gap-2">
-              {liveCount > 0 && <Pill color="green" dot blink label={`${liveCount} live`} />}
-              {recentCount > 0 && <Pill color="amber" dot label={`${recentCount} near real-time`} />}
-              {lastFetched && <Pill color="cyan" label={`Updated ${freshLabel}`} />}
+            {/* Status pills — hidden on small screens */}
+            <div className="hidden lg:flex items-center gap-2">
+              {liveCount > 0   && <Pill color="green" dot blink label={`${liveCount} live`} />}
+              {recentCount > 0 && <Pill color="amber" dot   label={`${recentCount} near-RT`} />}
+              {lastFetched     && <Pill color="cyan"        label={`${freshLabel} UTC`} />}
             </div>
 
             {/* Clock */}
-            <div className="hidden lg:block text-right">
+            <div className="hidden md:block text-right">
               <div className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>UTC</div>
               <div className="text-sm font-mono font-semibold glow-cyan" style={{ color: "var(--glow-cyan)" }}>
                 {clock}
@@ -121,7 +137,7 @@ export default function Dashboard() {
             <button
               onClick={() => fetchData(true)}
               disabled={refreshing || loading}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-40"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 flex-shrink-0"
               style={{
                 border: "1px solid rgba(34,211,238,0.25)",
                 color: "var(--glow-cyan)",
@@ -134,106 +150,82 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* ── Main ────────────────────────────────────────────────────────── */}
-        <main className="max-w-[1600px] mx-auto px-4 py-5">
+        {/* ── Content ─────────────────────────────────────────────────────── */}
+        <main className="max-w-5xl mx-auto px-4 py-5">
 
-          {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-48 gap-5">
               <div
                 className="w-12 h-12 rounded-full border-2 border-t-transparent animate-spin"
                 style={{ borderColor: "rgba(34,211,238,0.4)", borderTopColor: "transparent" }}
               />
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Loading climate data…
-              </p>
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading climate data…</p>
             </div>
           )}
 
           {error && !loading && (
             <div
               className="text-center p-6 text-sm rounded-xl border"
-              style={{
-                borderColor: "rgba(248,113,113,0.25)",
-                color: "var(--glow-red)",
-                background: "rgba(248,113,113,0.05)",
-              }}
+              style={{ borderColor: "rgba(248,113,113,0.25)", color: "var(--glow-red)", background: "rgba(248,113,113,0.05)" }}
             >
               ⚠ {error} —{" "}
-              <button onClick={() => fetchData()} className="underline opacity-70 hover:opacity-100">
-                retry
-              </button>
+              <button onClick={() => fetchData()} className="underline opacity-70 hover:opacity-100">retry</button>
             </div>
           )}
 
           {!loading && !error && (
             <>
-              {/* Mobile tab bar */}
+              {/* ── Tab bar (horizontally scrollable) ──────────────────── */}
               <div
-                className="flex lg:hidden gap-1 p-1 rounded-xl mb-4"
+                className="flex gap-1 p-1 rounded-xl overflow-x-auto mb-4 no-scrollbar"
                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
               >
-                {(["renewable", "carbon"] as Tab[]).map(t => (
+                {TABS.map(t => (
                   <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
-                    style={tab === t
+                    key={t.id}
+                    onClick={() => handleTab(t.id)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all flex-shrink-0"
+                    style={tab === t.id
                       ? { background: "rgba(34,211,238,0.15)", color: "var(--glow-cyan)" }
                       : { color: "var(--text-muted)" }
                     }
                   >
-                    {t === "renewable" ? "⚡ Renewable" : "🌿 Carbon"}
+                    <span>{t.icon}</span>
+                    <span>{t.label}</span>
                   </button>
                 ))}
               </div>
 
-              {/* Two-column layout */}
-              <div className="flex flex-col lg:flex-row gap-4">
-
-                {/* ── Renewable panel ──────────────────────────────────── */}
-                <section
-                  className={`flex-1 min-w-0 flex flex-col glass glass-accent relative animate-fade-in ${
-                    tab === "carbon" ? "hidden lg:flex" : "flex"
-                  }`}
-                >
-                  <PanelHeader
-                    icon="⚡"
-                    title="Renewable Energy"
-                    subtitle="Share of electricity from clean sources"
-                    count={filteredR.length}
-                    search={renewSearch}
-                    onSearch={setRenewSearch}
-                  />
-                  <div className="flex-1 overflow-y-auto" style={{ maxHeight: "calc(100vh - 210px)" }}>
-                    <RenewableLeaderboard data={filteredR} />
-                  </div>
-                </section>
-
-                {/* Vertical divider */}
-                <div
-                  className="hidden lg:block w-px self-stretch flex-shrink-0"
-                  style={{ background: "linear-gradient(to bottom, transparent, rgba(120,200,255,0.12), transparent)" }}
+              {/* ── Active tab header (metric explanation + search) ─────── */}
+              <div className="flex items-center justify-between gap-3 mb-3 flex-wrap gap-y-2">
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {activeTab.icon} {activeTab.label}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{activeTab.sub}</p>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search country…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="px-3 py-1.5 text-sm rounded-lg outline-none transition-all w-44"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: "var(--text-primary)",
+                  }}
+                  onFocus={e => (e.target.style.borderColor = "rgba(34,211,238,0.4)")}
+                  onBlur={e  => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
                 />
+              </div>
 
-                {/* ── Carbon panel ─────────────────────────────────────── */}
-                <section
-                  className={`flex-1 min-w-0 flex flex-col glass glass-accent relative animate-fade-in ${
-                    tab === "renewable" ? "hidden lg:flex" : "flex"
-                  }`}
-                >
-                  <PanelHeader
-                    icon="🌿"
-                    title="Carbon Footprint"
-                    subtitle="Tonnes CO₂ per capita per year"
-                    count={filteredC.length}
-                    search={carbSearch}
-                    onSearch={setCarbSearch}
-                  />
-                  <div className="flex-1 overflow-y-auto" style={{ maxHeight: "calc(100vh - 210px)" }}>
-                    <CarbonLeaderboard data={filteredC} />
-                  </div>
-                </section>
+              {/* ── Glass panel ────────────────────────────────────────── */}
+              <div className="glass glass-accent relative animate-fade-in">
+                {tab === "renewable" && <RenewableLeaderboard data={filter(renewable)} />}
+                {tab === "carbon"    && <CarbonLeaderboard    data={filter(carbon)}    />}
+                {tab === "cycling"   && <CyclingLeaderboard   data={filter(cycling)}   />}
+                {tab === "forest"    && <ForestLeaderboard    data={filter(forest)}    />}
               </div>
             </>
           )}
@@ -243,12 +235,9 @@ export default function Dashboard() {
           className="text-center text-xs py-6 border-t"
           style={{ borderColor: "rgba(255,255,255,0.05)", color: "var(--text-muted)" }}
         >
-          Data: Electricity Maps · Energy-Charts.info (Fraunhofer ISE / ENTSO-E) · World Bank · Global Carbon Project · Our World in Data
+          Data: Electricity Maps · Energy-Charts.info · World Bank · Global Carbon Project · ITDP · FAO · Our World in Data
           <br />
-          <a
-            href="https://github.com/gypelayo/climate-action-leaderboard"
-            className="hover:opacity-60 transition-opacity mt-1 inline-block"
-          >
+          <a href="https://github.com/gypelayo/climate-action-leaderboard" className="hover:opacity-60 transition-opacity mt-1 inline-block">
             github.com/gypelayo/climate-action-leaderboard
           </a>
         </footer>
@@ -257,11 +246,7 @@ export default function Dashboard() {
   );
 }
 
-/* ── Shared sub-components ─────────────────────────────────────────────────── */
-
-function Pill({
-  color, label, dot, blink,
-}: { color: "green"|"cyan"|"amber"|"red"; label: string; dot?: boolean; blink?: boolean }) {
+function Pill({ color, label, dot, blink }: { color: "green"|"cyan"|"amber"|"red"; label: string; dot?: boolean; blink?: boolean }) {
   const cols = {
     green: { bg: "rgba(52,211,153,0.1)",  border: "rgba(52,211,153,0.25)",  text: "#34d399" },
     cyan:  { bg: "rgba(34,211,238,0.1)",  border: "rgba(34,211,238,0.25)",  text: "#22d3ee" },
@@ -269,55 +254,9 @@ function Pill({
     red:   { bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.25)", text: "#f87171" },
   }[color];
   return (
-    <span
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-      style={{ background: cols.bg, border: `1px solid ${cols.border}`, color: cols.text }}
-    >
-      {dot && (
-        <span
-          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${blink ? "animate-blink" : "animate-pulse-dot"}`}
-          style={{ background: cols.text, color: cols.text }}
-        />
-      )}
+    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: cols.bg, border: `1px solid ${cols.border}`, color: cols.text }}>
+      {dot && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${blink ? "animate-blink" : "animate-pulse-dot"}`} style={{ background: cols.text, color: cols.text }} />}
       {label}
     </span>
-  );
-}
-
-function PanelHeader({
-  icon, title, subtitle, count, search, onSearch,
-}: {
-  icon: string; title: string; subtitle: string;
-  count: number; search: string; onSearch: (v: string) => void;
-}) {
-  return (
-    <div
-      className="flex items-center justify-between gap-3 px-5 py-4 border-b flex-wrap gap-y-2"
-      style={{ borderColor: "rgba(255,255,255,0.06)" }}
-    >
-      <div className="flex items-center gap-2.5">
-        <span className="text-xl">{icon}</span>
-        <div>
-          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{title}</h2>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {subtitle} · <span style={{ color: "var(--text-secondary)" }}>{count} nations</span>
-          </p>
-        </div>
-      </div>
-      <input
-        type="text"
-        placeholder="Search country…"
-        value={search}
-        onChange={e => onSearch(e.target.value)}
-        className="px-3 py-1.5 text-sm rounded-lg outline-none transition-all w-44"
-        style={{
-          background: "rgba(255,255,255,0.05)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          color: "var(--text-primary)",
-        }}
-        onFocus={e  => (e.target.style.borderColor = "rgba(34,211,238,0.4)")}
-        onBlur={e   => (e.target.style.borderColor = "rgba(255,255,255,0.1)")}
-      />
-    </div>
   );
 }

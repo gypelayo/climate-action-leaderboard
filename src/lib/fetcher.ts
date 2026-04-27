@@ -1,4 +1,4 @@
-import { BASELINE_RENEWABLE, BASELINE_CARBON, getFlagEmoji } from "./data";
+import { BASELINE_RENEWABLE, BASELINE_CARBON, BASELINE_CYCLING, getFlagEmoji } from "./data";
 import type { CountryRenewable, CountryCarbon } from "@/types";
 
 // Electricity Maps free API — zone-level real-time power breakdown
@@ -215,4 +215,78 @@ export async function getCarbonLeaderboard(): Promise<CountryCarbon[]> {
   }
 
   return results.sort((a, b) => a.co2PerCapita - b.co2PerCapita);
+}
+
+export async function getCyclingLeaderboard(): Promise<import("@/types").CountryCycling[]> {
+  return Object.entries(BASELINE_CYCLING)
+    .map(([code, info]) => ({
+      country:    info.name,
+      code,
+      flag:       getFlagEmoji(code),
+      modalShare: info.modalShare,
+      source:     "Eurobarometer / ITDP / national transport surveys",
+      year:       info.year,
+    }))
+    .sort((a, b) => b.modalShare - a.modalShare);
+}
+
+export async function getForestLeaderboard(): Promise<import("@/types").CountryForest[]> {
+  // World Bank: AG.LND.FRST.ZS = forest % of land, AG.LND.FRST.K2 = forest km²
+  // Free, no key needed. Most recent data typically 2020–2022.
+  const pctMap = new Map<string, { val: number; year: number }>();
+  const km2Map = new Map<string, { val: number; year: number }>();
+
+  const BASE_WB = "https://api.worldbank.org/v2/country/all/indicator";
+  const PARAMS  = "?format=json&mrv=3&per_page=400";
+
+  async function fetchWB(indicator: string, target: Map<string, { val: number; year: number }>) {
+    try {
+      const res = await fetch(`${BASE_WB}/${indicator}${PARAMS}`, {
+        signal: AbortSignal.timeout(25_000),
+      } as RequestInit);
+      if (!res.ok) return;
+      const json = await res.json();
+      for (const entry of json[1] ?? []) {
+        const iso2: string = entry.country?.id ?? "";
+        if (iso2.length !== 2 || !/^[A-Z]{2}$/.test(iso2)) continue;
+        if (entry.value === null || entry.value === undefined) continue;
+        const year = parseInt(entry.date, 10);
+        const existing = target.get(iso2);
+        if (!existing || year > existing.year) {
+          target.set(iso2, { val: Math.round(entry.value * 100) / 100, year });
+        }
+      }
+    } catch { /* fallback to no-API */ }
+  }
+
+  await Promise.all([
+    fetchWB("AG.LND.FRST.ZS", pctMap),
+    fetchWB("AG.LND.FRST.K2", km2Map),
+  ]);
+
+  const results: import("@/types").CountryForest[] = [];
+
+  // Build unified list from countries that have BOTH metrics from WB
+  const codes = new Set([...pctMap.keys(), ...km2Map.keys()]);
+  for (const code of codes) {
+    const pct = pctMap.get(code);
+    const km2 = km2Map.get(code);
+    if (!pct || !km2) continue;
+    // Filter out WB aggregate regions
+    const info = (BASELINE_RENEWABLE[code] || BASELINE_CARBON[code] || BASELINE_CYCLING[code]) as { name?: string } | undefined;
+    const name = info?.name;
+    if (!name) continue; // skip regions we don't have in our datasets
+
+    results.push({
+      country:       name,
+      code,
+      flag:          getFlagEmoji(code),
+      forestPercent: pct.val,
+      forestKm2:     km2.val,
+      source:        "World Bank / FAO",
+      year:          Math.max(pct.year, km2.year),
+    });
+  }
+
+  return results.sort((a, b) => b.forestPercent - a.forestPercent);
 }

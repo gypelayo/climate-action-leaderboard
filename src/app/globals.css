@@ -80,6 +80,9 @@ body::after {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(100,200,255,0.2); border-radius: 2px; }
 
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* ── Segmented bar font ───────────────────────────────────────────────────── */
 .seg-bar {
   font-family: var(--font-geist-mono), monospace;

@@ -6,12 +6,6 @@ export interface CountryRenewable {
   source: "live" | "recent" | "annual";
   updatedAt: string;
   breakdown?: {
-    solar?: number;
-    wind?: number;
-    hydro?: number;
-    nuclear?: number;
-    fossil?: number;
-    other?: number;
     [key: string]: number | undefined;
   };
 }
@@ -23,12 +17,31 @@ export interface CountryCarbon {
   co2PerCapita: number; // tonnes CO2 per person per year
   year: number;
   source: string;
-  trend?: "up" | "down" | "stable";
-  changePercent?: number;
+}
+
+export interface CountryCycling {
+  country: string;
+  code: string;
+  flag: string;
+  modalShare: number; // % of daily trips made by bicycle
+  source: string;
+  year: number;
+}
+
+export interface CountryForest {
+  country: string;
+  code: string;
+  flag: string;
+  forestPercent: number; // % of total land area covered by forest
+  forestKm2: number;     // absolute forest area in sq km
+  source: string;
+  year: number;
 }
 
 export interface LeaderboardData {
   renewable: CountryRenewable[];
-  carbon: CountryCarbon[];
+  carbon:    CountryCarbon[];
+  cycling:   CountryCycling[];
+  forest:    CountryForest[];
   lastFetched: string;
 }
